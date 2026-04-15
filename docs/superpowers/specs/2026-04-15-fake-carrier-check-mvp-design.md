@@ -16,20 +16,26 @@ This application allows logistics companies to run AI-powered checks on freight 
 
 ### In Scope
 - Document-based AI analysis of carrier documents using Claude
-- Web UI with wizard-to-dashboard flow + optional chat mode
+- Ecclesia-branded web UI with wizard-to-dashboard flow + optional chat mode
+- Progress bar throughout the check process so the user always knows where they are
 - Two-axis risk/confidence scoring model
 - Branded PDF report generation (Ecclesia Gruppe)
 - Check history
-- Internal backlog kanban board
+- Internal backlog kanban board (pre-seeded with out-of-scope items, see Section 17)
 - Configurable document type registry
 - Guidance layer: what AI checked, what human must do, what's outside scope
+- Architecture designed for easy addition of external API lookups in future phases
 
 ### Out of Scope (future phases)
-- External registry API lookups (VIES, KREPTD, KRS, ARR, RPSD, etc.)
+All out-of-scope items are pre-seeded as backlog items (see Section 17) so nothing is lost.
+
+- External registry API lookups (VIES, KREPTD, KRS, ARR, RPSD, etc.) — **High priority backlog**
 - User authentication (MS Entra Azure planned)
 - Multi-tenant client access / billing
 - TIMOCOM API integration
 - Blacklist databases
+- Rebrand to SCHUNCK Group (current: Ecclesia Gruppe)
+- User feedback collection process for MVP testers
 
 ## 3. Users & Access
 
@@ -64,9 +70,10 @@ This application allows logistics companies to run AI-powered checks on freight 
 │  ─────              ──────────        ────────      │
 │  / (home)           /api/analyze      analysis/     │
 │  /check             /api/chat           ├ pipeline  │
-│  /results/[id]      /api/report         ├ scoring   │
-│  /history           /api/upload         └ prompts   │
-│  /backlog                             db/           │
+│  /results/[id]      /api/report         ├ providers │
+│  /history           /api/upload         ├ scoring   │
+│  /backlog           /api/feedback       └ prompts   │
+│  /feedback                            db/           │
 │                                         ├ schema    │
 │                                         └ drizzle   │
 │                                       pdf/          │
@@ -82,11 +89,45 @@ This application allows logistics companies to run AI-powered checks on freight 
 
 Concurrent users are handled naturally — each Claude API call is independent, and Next.js handles parallel requests out of the box.
 
+### 5.1 External API Extensibility
+
+The analysis pipeline is designed with a **provider pattern** so external registry lookups can be added without restructuring:
+
+```
+/lib/analysis/
+  ├── pipeline.ts           Orchestrator (calls providers in sequence)
+  ├── providers/
+  │   ├── types.ts          Provider interface definition
+  │   ├── claude-document.ts  MVP: Claude-based document analysis
+  │   ├── vies.ts             Future: EU VAT validation
+  │   ├── kreptd.ts           Future: Polish transport license
+  │   ├── balm.ts             Future: German BALM registry
+  │   └── ...                 Future: additional registries
+  └── scoring.ts            Aggregates results from all providers
+```
+
+Each provider implements the same interface: accepts carrier data, returns extracted fields + risk signals + confidence contribution. The pipeline calls all registered providers and the scoring engine aggregates. Adding a new external source = adding a new provider file and registering it in config. No changes to the pipeline, scoring, or UI.
+
 ## 6. Pages & User Flow
+
+### 6.0 Progress Bar (Global)
+
+A persistent progress bar is visible throughout the check wizard and results flow, showing the user exactly where they are:
+
+```
+[1. Dokumente hochladen] → [2. Analyse läuft] → [3. Ergebnis & Empfehlung] → [4. Bericht]
+```
+
+- Step 1: Upload & carrier info (active during wizard step 1)
+- Step 2: AI analysis in progress (active during wizard step 2, shows per-document sub-progress)
+- Step 3: Results & recommendation (active on results dashboard)
+- Step 4: Report downloaded or chat completed (final state)
+
+Visually styled with Ecclesia brand colors. Current step highlighted in Dark Blue, completed steps in Mint, upcoming steps in Grey.
 
 ### 6.1 Home (`/`)
 
-- Ecclesia-branded landing with app purpose
+- Ecclesia-branded landing page with app purpose, logo, and corporate styling
 - Primary CTA: "Neue Prüfung starten"
 - Quick stats: total checks run, recent checks list
 - Navigation to History and Backlog
@@ -404,7 +445,9 @@ Later: swap to Vercel Turso or Azure data persistence.
 
 ## 14. Brand & Styling
 
-**Brand:** Ecclesia Gruppe
+**Brand:** Ecclesia Gruppe (future: rebrand to SCHUNCK Group — see Backlog BL-006)
+
+The entire web UI is Ecclesia-branded: navigation, pages, cards, buttons, forms, charts, and PDF output all use the Ecclesia design tokens. The brand is applied via Tailwind CSS custom theme so rebranding to SCHUNCK later requires only swapping the token values and logo assets.
 
 | Token | Value | Usage |
 |-------|-------|-------|
@@ -419,6 +462,8 @@ Later: swap to Vercel Turso or Azure data persistence.
 **Typography:** Barlow (headlines), Inter (body/UI). **Grid:** 12-column, max 1304px.
 
 **UI language:** German. **Codebase language:** English.
+
+**Logo:** Ecclesia Gruppe logo in header/nav. White variant on dark backgrounds, color variant on light backgrounds.
 
 ## 15. Configurable Elements
 
@@ -439,3 +484,63 @@ The following are configurable without code changes to the core pipeline:
 - **No real-time verification** — cannot call insurers, check live registries
 - **Document language** — Claude handles multilingual analysis (DE, PL, RO, CZ, SK, EN, etc.) but UI is German only
 - **File size** — practical limit based on Claude's context window for vision inputs
+
+## 17. Pre-Seeded Backlog Items
+
+The backlog is pre-populated with all known future work items so nothing from the out-of-scope list is lost. Items are ordered by priority.
+
+| # | Title | Priority | Description |
+|---|-------|----------|-------------|
+| BL-001 | External registry API: VIES (EU VAT validation) | High | Integrate VIES API to auto-validate VAT numbers. Provider pattern already in place. |
+| BL-002 | External registry API: KREPTD (PL transport license) | High | Query Polish transport license register for license validity and vehicle count. |
+| BL-003 | External registry API: BALM (DE transport register) | High | Query German BALM Verkehrsunternehmerdatei for German-based carriers. |
+| BL-004 | External registry APIs: KRS, CEIDG, ONRC, ARR, RPSD | High | Remaining country-specific registries (PL, RO, CZ) from Datenquellen_Uebersicht. |
+| BL-005 | User feedback collection process | High | In-app feedback mechanism for MVP testers (see Section 18). |
+| BL-006 | Rebrand to SCHUNCK Group | Medium | Swap Ecclesia brand tokens and logo for SCHUNCK Group identity. Brand is centralized in Tailwind theme — token swap only. |
+| BL-007 | MS Entra Azure authentication | Medium | Add SSO login for broker and client access. Required before client rollout. |
+| BL-008 | Multi-tenant client access & billing | Medium | Role-based access (broker vs. client), per-check billing (2-5 EUR), PayPal/digital payment. |
+| BL-009 | TIMOCOM API integration | Medium | Auto-pull carrier profile from TIMOCOM instead of manual upload. |
+| BL-010 | Blacklist database integration | Medium | Connect to TAPA, IConsult47, and other fraud databases for known-bad carrier matching. |
+| BL-011 | Vercel + Turso deployment | Medium | Migrate from local SQLite to Vercel hosting with Turso database. |
+| BL-012 | Azure data persistence | Low | Alternative to Turso: Azure-based file and data storage. |
+| BL-013 | Fahrzeug-Fotoanalyse (vehicle photo analysis) | Low | Use Claude vision to analyze vehicle photos for plausibility. |
+| BL-014 | Graph-based pattern analysis | Low | Cross-check carriers against a relationship graph of known entities. |
+| BL-015 | Agent-to-Agent cooperation | Low | Compliance agent, legal agent, etc. working together on complex cases. |
+
+## 18. User Feedback Process
+
+During MVP testing, structured feedback collection is essential to iterate quickly. This is a backlog item (BL-005) but the process is designed here so it can be built early.
+
+### 18.1 Feedback Categories
+
+Testers provide feedback in three categories:
+
+| Category | Label (DE) | Color | Description |
+|----------|-----------|-------|-------------|
+| Works well | "Funktioniert gut" | Green | Features or behaviors that work as expected and should be kept |
+| Needs improvement | "Verbesserungsbedarf" | Yellow | Features that work but need refinement (UX, accuracy, speed, clarity) |
+| Does not work | "Funktioniert nicht" | Red | Broken features, wrong results, crashes, blockers |
+
+### 18.2 Collection Points
+
+Feedback can be submitted at two points:
+
+1. **After each check** — A short feedback prompt appears after the results are shown: "Wie war diese Prüfung?" with the three category buttons + optional free-text comment.
+2. **Anytime via feedback button** — A persistent "Feedback" button in the navigation opens a form where the tester can describe issues, attach screenshots, and reference a specific check number.
+
+### 18.3 Feedback Storage
+
+Feedback is stored in a `feedback` table:
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID | Primary key |
+| checkId | FK | Optional → checks (if tied to a specific check) |
+| category | enum | works_well, needs_improvement, does_not_work |
+| comment | text | Free-text description |
+| page | string | Which page/step the feedback is about |
+| createdAt | timestamp | |
+
+### 18.4 Feedback Review
+
+Feedback items appear as a filterable list on a `/feedback` page (internal, accessible from backlog). They can be converted to backlog items with one click if they represent actionable work.
