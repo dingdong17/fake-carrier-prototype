@@ -8,6 +8,7 @@ const links = [
   { href: "/check", label: "Neue Prüfung" },
   { href: "/history", label: "Verlauf" },
   { href: "/backlog", label: "Backlog" },
+  { href: "/feedback", label: "Feedback" },
 ];
 
 export function NavLinks() {

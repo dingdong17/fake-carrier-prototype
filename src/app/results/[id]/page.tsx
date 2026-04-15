@@ -10,6 +10,7 @@ import { MissingDocs } from "@/components/results/missing-docs";
 import { GuidanceTier } from "@/components/results/guidance-tier";
 import { DocumentCard } from "@/components/results/document-card";
 import { ChatPanel } from "@/components/results/chat-panel";
+import { FeedbackPrompt } from "@/components/feedback/feedback-prompt";
 
 interface CheckData {
   id: string;
@@ -230,6 +231,11 @@ export default function ResultsPage() {
               <DocumentCard key={doc.id} document={doc} />
             ))}
           </div>
+        </div>
+
+        {/* Feedback */}
+        <div className="mb-6">
+          <FeedbackPrompt checkId={params.id} />
         </div>
 
         {/* Chat button */}
