@@ -9,6 +9,7 @@ import { NextSteps } from "@/components/results/next-steps";
 import { MissingDocs } from "@/components/results/missing-docs";
 import { GuidanceTier } from "@/components/results/guidance-tier";
 import { DocumentCard } from "@/components/results/document-card";
+import { ChatPanel } from "@/components/results/chat-panel";
 
 interface CheckData {
   id: string;
@@ -113,6 +114,7 @@ export default function ResultsPage() {
   const [documents, setDocuments] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -234,6 +236,7 @@ export default function ResultsPage() {
         <div className="flex justify-center pb-8">
           <button
             type="button"
+            onClick={() => setIsChatOpen(true)}
             className="flex items-center gap-2 rounded-lg bg-ec-dark-blue px-6 py-3 text-sm font-medium text-white hover:bg-ec-dark-blue/90 transition-colors shadow-sm"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -243,6 +246,12 @@ export default function ResultsPage() {
           </button>
         </div>
       </div>
+
+      <ChatPanel
+        checkId={params.id}
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+      />
     </div>
   );
 }
