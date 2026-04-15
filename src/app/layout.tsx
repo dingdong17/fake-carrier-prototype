@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Frachtf\u00fchrer-Pr\u00fcfung | Ecclesia Gruppe",
-  description: "KI-gest\u00fctzte Pr\u00fcfung von Frachtf\u00fchrern zur Betrugspr\u00e4vention",
+  title: "Frachtführer-Prüfung | Ecclesia Gruppe",
+  description: "KI-gestützte Prüfung von Frachtführern zur Betrugsprävention",
 };
 
 export default function RootLayout({
@@ -19,8 +21,12 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen bg-ec-light-grey font-inter">
-        {children}
+      <body className="flex min-h-screen flex-col bg-ec-light-grey font-inter">
+        <Header />
+        <main className="mx-auto w-full max-w-content flex-1 px-6 py-8">
+          {children}
+        </main>
+        <Footer />
       </body>
     </html>
   );
