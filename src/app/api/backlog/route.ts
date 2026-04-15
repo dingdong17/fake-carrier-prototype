@@ -17,22 +17,27 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  try {
+    const body = await request.json();
 
-  if (body.action === "create") {
-    const count = db
-      .select({ count: sql<number>`count(*)` })
-      .from(backlogItems)
-      .get();
-    const seq = (count?.count || 0) + 1;
+    if (body.action === "create") {
+      if (!body.title || typeof body.title !== "string" || !body.title.trim()) {
+        return NextResponse.json({ error: "Title is required" }, { status: 400 });
+      }
 
-    const priority = ((body.priority as string) || "medium") as
-      "critical" | "high" | "medium" | "low";
+      const count = db
+        .select({ count: sql<number>`count(*)` })
+        .from(backlogItems)
+        .get();
+      const seq = (count?.count || 0) + 1;
 
-    const item = {
-      id: generateId(),
-      itemNumber: formatBacklogNumber(seq),
-      title: body.title as string,
+      const priority = ((body.priority as string) || "medium") as
+        "critical" | "high" | "medium" | "low";
+
+      const item = {
+        id: generateId(),
+        itemNumber: formatBacklogNumber(seq),
+        title: body.title.trim() as string,
       description: (body.description as string) || null,
       priority,
       status: "backlog" as const,
@@ -46,24 +51,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ item });
   }
 
-  if (body.action === "update") {
-    const updates: Record<string, unknown> = {
-      updatedAt: new Date().toISOString(),
-    };
+    if (body.action === "update") {
+      if (!body.id || typeof body.id !== "string") {
+        return NextResponse.json({ error: "ID is required for update" }, { status: 400 });
+      }
 
-    if (body.status !== undefined) updates.status = body.status;
-    if (body.priority !== undefined) updates.priority = body.priority;
-    if (body.title !== undefined) updates.title = body.title;
-    if (body.description !== undefined) updates.description = body.description;
-    if (body.sortOrder !== undefined) updates.sortOrder = body.sortOrder;
+      const updates: Record<string, unknown> = {
+        updatedAt: new Date().toISOString(),
+      };
 
-    db.update(backlogItems)
-      .set(updates)
-      .where(eq(backlogItems.id, body.id))
-      .run();
+      if (body.status !== undefined) updates.status = body.status;
+      if (body.priority !== undefined) updates.priority = body.priority;
+      if (body.title !== undefined) updates.title = body.title;
+      if (body.description !== undefined) updates.description = body.description;
+      if (body.sortOrder !== undefined) updates.sortOrder = body.sortOrder;
 
-    return NextResponse.json({ success: true });
+      db.update(backlogItems)
+        .set(updates)
+        .where(eq(backlogItems.id, body.id))
+        .run();
+
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }
