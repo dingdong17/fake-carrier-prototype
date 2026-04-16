@@ -24,6 +24,7 @@ interface ExtractionPreviewProps {
   extractedData: ExtractedInsuranceData;
   onAccept: (prefill: Partial<CarrierFormData>) => void;
   onDismiss: () => void;
+  disabled?: boolean;
 }
 
 export function ExtractionPreview({
@@ -32,6 +33,7 @@ export function ExtractionPreview({
   extractedData,
   onAccept,
   onDismiss,
+  disabled,
 }: ExtractionPreviewProps) {
   const fields: Array<{ label: string; value: string | null | undefined; formField?: keyof CarrierFormData }> = [];
 
@@ -171,19 +173,26 @@ export function ExtractionPreview({
           ))}
         </div>
 
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-sm font-medium text-ec-dark-blue">
-            Sollen die erkannten Daten übernommen werden?
-          </p>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={onDismiss}>
-              Nein, verwerfen
-            </Button>
-            <Button variant="primary" size="sm" onClick={handleAccept}>
-              Ja, Daten übernehmen
-            </Button>
+        {disabled ? (
+          <div className="flex items-center gap-2 pt-2 text-sm text-ec-grey-70">
+            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-dark-blue border-t-transparent" />
+            Weitere Dokumente werden noch analysiert...
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-sm font-medium text-ec-dark-blue">
+              Sollen die erkannten Daten übernommen werden?
+            </p>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={onDismiss}>
+                Nein, verwerfen
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleAccept}>
+                Ja, Daten übernehmen
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );

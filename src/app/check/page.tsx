@@ -61,17 +61,18 @@ export default function CheckPage() {
   const [analysisEvents, setAnalysisEvents] = useState<AnalysisEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pendingExtractions, setPendingExtractions] = useState<PendingExtraction[]>([]);
+  const [analyzingDocId, setAnalyzingDocId] = useState<string | null>(null);
   const [classificationLog, setClassificationLog] = useState<string[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([
-    { id: "insurance-cert", labelDe: "Versicherungsnachweis vorhanden", checked: false, autoDetected: false },
-    { id: "is-verkehrshaftung", labelDe: "Verkehrshaftungsversicherung bestätigt", checked: false, autoDetected: false },
-    { id: "vat-valid", labelDe: "USt-IdNr. geprüft (VIES)", checked: false, autoDetected: false },
-    { id: "website-exists", labelDe: "Webseite des Unternehmens erreichbar", checked: false, autoDetected: false },
-    { id: "transport-license", labelDe: "EU-Transportlizenz vorhanden", checked: false, autoDetected: false },
-    { id: "letterhead", labelDe: "Briefkopf / Unternehmensdaten vorhanden", checked: false, autoDetected: false },
-    { id: "freight-profile", labelDe: "Frachtenbörsen-Profil vorhanden", checked: false, autoDetected: false },
-    { id: "communication", labelDe: "Kommunikation / E-Mails vorhanden", checked: false, autoDetected: false },
-    { id: "driver-vehicle", labelDe: "Fahrer- & Fahrzeugdaten vorhanden", checked: false, autoDetected: false },
+    { id: "insurance-cert", labelDe: "Versicherungsnachweis", checked: false, autoDetected: false },
+    { id: "is-verkehrshaftung", labelDe: "Verkehrshaftung bestätigt", checked: false, autoDetected: false },
+    { id: "vat-valid", labelDe: "USt-IdNr. geprüft", checked: false, autoDetected: false },
+    { id: "website-exists", labelDe: "Webseite erreichbar", checked: false, autoDetected: false },
+    { id: "transport-license", labelDe: "EU-Transportlizenz", checked: false, autoDetected: false },
+    { id: "letterhead", labelDe: "Briefkopf / Firmendaten", checked: false, autoDetected: false },
+    { id: "freight-profile", labelDe: "Frachtenbörsen-Profil", checked: false, autoDetected: false },
+    { id: "communication", labelDe: "Kommunikation", checked: false, autoDetected: false },
+    { id: "driver-vehicle", labelDe: "Fahrer- & Fahrzeugdaten", checked: false, autoDetected: false },
   ]);
 
   const allChecked = useMemo(() => checklist.every((item) => item.checked), [checklist]);
@@ -118,6 +119,9 @@ export default function CheckPage() {
         setIsClassifying(true);
 
         for (const doc of newDocs) {
+          // Track which doc is being analyzed
+          setAnalyzingDocId(doc.id);
+
           // Phase 1: Upload acknowledged
           setClassificationLog((prev) => [...prev, `Dokument empfangen: "${doc.fileName}"`]);
 
@@ -295,9 +299,11 @@ export default function CheckPage() {
         }
 
         setIsClassifying(false);
+        setAnalyzingDocId(null);
       } catch (err) {
         setIsUploading(false);
         setIsClassifying(false);
+        setAnalyzingDocId(null);
         setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
       }
     },
@@ -470,7 +476,7 @@ export default function CheckPage() {
               {uploadedDocs.length > 0 && (
                 <Card>
                   <CardContent>
-                    <DocumentList documents={uploadedDocs} />
+                    <DocumentList documents={uploadedDocs} analyzingDocId={analyzingDocId} />
                   </CardContent>
                 </Card>
               )}
@@ -483,6 +489,7 @@ export default function CheckPage() {
                   extractedData={pendingExtractions[0].extractedData}
                   onAccept={handleAcceptExtraction}
                   onDismiss={handleDismissExtraction}
+                  disabled={isClassifying}
                 />
               )}
             </div>
