@@ -58,6 +58,8 @@ export default function CheckPage() {
   const [checklist, setChecklist] = useState<ChecklistItem[]>([
     { id: "insurance-cert", labelDe: "Versicherungsnachweis vorhanden", checked: false, autoDetected: false },
     { id: "is-verkehrshaftung", labelDe: "Verkehrshaftungsversicherung bestätigt", checked: false, autoDetected: false },
+    { id: "vat-valid", labelDe: "USt-IdNr. geprüft (VIES)", checked: false, autoDetected: false },
+    { id: "website-exists", labelDe: "Webseite des Unternehmens erreichbar", checked: false, autoDetected: false },
     { id: "transport-license", labelDe: "EU-Transportlizenz vorhanden", checked: false, autoDetected: false },
     { id: "letterhead", labelDe: "Briefkopf / Unternehmensdaten vorhanden", checked: false, autoDetected: false },
     { id: "freight-profile", labelDe: "Frachtenbörsen-Profil vorhanden", checked: false, autoDetected: false },
@@ -176,6 +178,76 @@ export default function CheckPage() {
                     extractedData: classifyData.extractedData,
                   },
                 ]);
+
+                // Auto-verify: VAT + Website check
+                const companyName = classifyData.extractedData.insuredCompany as string | undefined;
+                const vatId = classifyData.extractedData.vatId as string | undefined;
+
+                if (companyName || vatId) {
+                  setClassificationLog((prev) => [...prev, "Unternehmensprüfung wird durchgeführt..."]);
+
+                  try {
+                    const verifyRes = await fetch("/api/verify", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        companyName: companyName || "",
+                        vatId: vatId || "",
+                        country: "",
+                      }),
+                    });
+
+                    if (verifyRes.ok) {
+                      const verifyData = await verifyRes.json();
+
+                      if (verifyData.vatValidation) {
+                        const vat = verifyData.vatValidation;
+                        if (vat.valid) {
+                          setClassificationLog((prev) => [
+                            ...prev,
+                            `USt-IdNr. ${vatId} ist gültig` + (vat.registeredName ? ` (${vat.registeredName})` : ""),
+                          ]);
+                          setChecklist((prev) =>
+                            prev.map((item) =>
+                              item.id === "vat-valid"
+                                ? { ...item, checked: true, autoDetected: true, details: vat.registeredName || `${vatId} gültig` }
+                                : item
+                            )
+                          );
+                        } else {
+                          setClassificationLog((prev) => [
+                            ...prev,
+                            `USt-IdNr. ${vatId}: ${vat.error || "Nicht gültig oder nicht gefunden"}`,
+                          ]);
+                        }
+                      }
+
+                      if (verifyData.websiteCheck) {
+                        const web = verifyData.websiteCheck;
+                        if (web.exists) {
+                          setClassificationLog((prev) => [
+                            ...prev,
+                            `Webseite gefunden: ${web.url}`,
+                          ]);
+                          setChecklist((prev) =>
+                            prev.map((item) =>
+                              item.id === "website-exists"
+                                ? { ...item, checked: true, autoDetected: true, details: web.url }
+                                : item
+                            )
+                          );
+                        } else {
+                          setClassificationLog((prev) => [
+                            ...prev,
+                            `Keine Webseite gefunden für "${companyName}"`,
+                          ]);
+                        }
+                      }
+                    }
+                  } catch {
+                    setClassificationLog((prev) => [...prev, "Unternehmensprüfung fehlgeschlagen"]);
+                  }
+                }
               }
             } else {
               setClassificationLog((prev) => [...prev, `"${doc.fileName}": Klassifizierung fehlgeschlagen`]);

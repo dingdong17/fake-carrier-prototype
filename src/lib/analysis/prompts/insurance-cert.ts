@@ -18,6 +18,7 @@ PFLICHTFELDER extrahieren:
 - coverageAmount: Deckungssumme / Höchstentschädigung (Betrag und Währung, z.B. "5 Mio. Euro je Schadenereignis")
 - insuredCompany: Name des Versicherungsnehmers / versicherten Unternehmens (OHNE "Firma" oder "Fa." Präfix)
 - contactInfo: Kontaktdaten des Versicherers (Adresse, Telefon, E-Mail falls vorhanden)
+- vatId: Umsatzsteuer-Identifikationsnummer (USt-IdNr.) des Versicherungsnehmers oder des Versicherers, falls im Dokument angegeben. Format z.B. "DE123456789". Suche auch nach "UID", "Steuernummer", "USt-ID", "VAT", "Umsatzsteuer-Identifikationsnummer"
 
 OPTIONALE FELDER:
 - coverageType: Art der Versicherung (z.B. "Verkehrshaftungsversicherung", "CMR", "F&S", "VKH")
@@ -58,6 +59,7 @@ Antworte NUR mit einem JSON-Objekt:
     "coverageAmount": { "amount": 5000000, "currency": "EUR", "description": "z.B. 5 Mio. Euro je Schadenereignis" },
     "insuredCompany": "Firmenname ohne Fa./Firma Präfix oder null",
     "contactInfo": { "phone": "Telefon oder null", "email": "E-Mail oder null", "address": "Adresse oder null" },
+    "vatId": "USt-IdNr. oder null",
     "coverageType": "Art der Versicherung oder null",
     "isVerkehrshaftung": true,
     "coInsuredCompanies": ["Firmenname 1 ohne Fa.", "Firmenname 2 ohne Fa."],
