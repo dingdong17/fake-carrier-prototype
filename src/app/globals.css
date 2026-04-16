@@ -25,6 +25,29 @@
   --font-inter: "Inter", sans-serif;
 }
 
+/* Brand CSS variables — set by BrandProvider, defaults to Ecclesia */
+:root {
+  --brand-primary: #2649A5;
+  --brand-primary-hover: #0050D2;
+  --brand-accent: #75E7BC;
+  --brand-accent-hover: #7BCA65;
+  --brand-text: #3B3B3B;
+  --brand-text-muted: #979797;
+  --brand-border: #E2E2E2;
+  --brand-border-light: #EEEEEE;
+  --brand-background: #F7F7F7;
+  --brand-surface: #FFFFFF;
+  --brand-error: #E02E2A;
+  --brand-warning: #EF6C00;
+  --brand-info: #0088D1;
+  --brand-success: #2F7D31;
+  --brand-red: #F75880;
+  --brand-yellow: #FFCF31;
+  --brand-font-heading: "Barlow", sans-serif;
+  --brand-font-body: "Inter", sans-serif;
+  --brand-radius: 0.75rem;
+}
+
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
@@ -32,13 +55,13 @@
 
 @layer base {
   body {
-    font-family: var(--font-inter);
-    color: var(--color-ec-grey-80);
-    background-color: var(--color-ec-light-grey);
+    font-family: var(--brand-font-body);
+    color: var(--brand-text);
+    background-color: var(--brand-background);
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-barlow);
-    color: var(--color-ec-dark-blue);
+    font-family: var(--brand-font-heading);
+    color: var(--brand-primary);
   }
 }

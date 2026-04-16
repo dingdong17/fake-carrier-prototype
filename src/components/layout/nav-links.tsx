@@ -25,11 +25,12 @@ export function NavLinks() {
           <Link
             key={link.href}
             href={link.href}
-            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+            className="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+            style={
               isActive
-                ? "bg-ec-dark-blue text-white"
-                : "text-ec-grey-80 hover:bg-ec-grey-40"
-            }`}
+                ? { backgroundColor: "var(--brand-primary)", color: "#fff" }
+                : { color: "var(--brand-text)" }
+            }
           >
             {link.label}
           </Link>
