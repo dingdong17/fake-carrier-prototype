@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ec-dark-blue: #2649A5;
+  --color-ec-light-blue: #0050D2;
+  --color-ec-mint: #75E7BC;
+  --color-ec-red: #F75880;
+  --color-ec-turquoise: #7BD7DB;
+  --color-ec-violet: #AC78E0;
+  --color-ec-yellow: #FFCF31;
+  --color-ec-dark-green: #005E47;
+  --color-ec-light-green: #7BCA65;
+  --color-ec-grey-80: #3B3B3B;
+  --color-ec-grey-70: #979797;
+  --color-ec-grey-60: #CCCCCC;
+  --color-ec-grey-40: #EEEEEE;
+  --color-ec-light-grey: #F7F7F7;
+  --color-ec-medium-grey: #E2E2E2;
+  --color-ec-error: #E02E2A;
+  --color-ec-warning: #EF6C00;
+  --color-ec-info: #0088D1;
+  --color-ec-success: #2F7D31;
+
+  --font-barlow: "Barlow", sans-serif;
+  --font-inter: "Inter", sans-serif;
+}
+
+/* Brand CSS variables — set by BrandProvider, defaults to Ecclesia */
+:root {
+  --brand-primary: #2649A5;
+  --brand-primary-hover: #0050D2;
+  --brand-accent: #75E7BC;
+  --brand-accent-hover: #7BCA65;
+  --brand-text: #3B3B3B;
+  --brand-text-muted: #979797;
+  --brand-border: #E2E2E2;
+  --brand-border-light: #EEEEEE;
+  --brand-background: #F7F7F7;
+  --brand-surface: #FFFFFF;
+  --brand-error: #E02E2A;
+  --brand-warning: #EF6C00;
+  --brand-info: #0088D1;
+  --brand-success: #2F7D31;
+  --brand-red: #F75880;
+  --brand-yellow: #FFCF31;
+  --brand-font-heading: "Barlow", sans-serif;
+  --brand-font-body: "Inter", sans-serif;
+  --brand-radius: 0.75rem;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@layer base {
+  body {
+    font-family: var(--brand-font-body);
+    color: var(--brand-text);
+    background-color: var(--brand-background);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--brand-font-heading);
+    color: var(--brand-primary);
+  }
+}
