@@ -26,7 +26,11 @@ const prompts: Record<string, string> = {
 
 const client = new Anthropic();
 
-function getMediaType(
+function isPdf(mimeType: string): boolean {
+  return mimeType === "application/pdf" || mimeType.endsWith(".pdf");
+}
+
+function getImageMediaType(
   mimeType: string
 ): "image/jpeg" | "image/png" | "image/gif" | "image/webp" {
   const mapping: Record<
@@ -38,9 +42,32 @@ function getMediaType(
     "image/png": "image/png",
     "image/gif": "image/gif",
     "image/webp": "image/webp",
-    "application/pdf": "image/png",
   };
   return mapping[mimeType] || "image/jpeg";
+}
+
+function buildDocumentContent(
+  base64Data: string,
+  mimeType: string
+): Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam {
+  if (isPdf(mimeType)) {
+    return {
+      type: "document",
+      source: {
+        type: "base64",
+        media_type: "application/pdf",
+        data: base64Data,
+      },
+    };
+  }
+  return {
+    type: "image",
+    source: {
+      type: "base64",
+      media_type: getImageMediaType(mimeType),
+      data: base64Data,
+    },
+  };
 }
 
 function buildGenericPrompt(documentType: string): string {
@@ -85,14 +112,7 @@ export async function classifyDocument(
       {
         role: "user",
         content: [
-          {
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: getMediaType(mimeType),
-              data: base64Data,
-            },
-          },
+          buildDocumentContent(base64Data, mimeType),
           {
             type: "text",
             text: CLASSIFY_PROMPT,
@@ -139,14 +159,7 @@ export const claudeDocumentProvider: AnalysisProvider = {
         {
           role: "user",
           content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: getMediaType(mimeType),
-                data: base64Data,
-              },
-            },
+            buildDocumentContent(base64Data, mimeType),
             {
               type: "text",
               text: prompt + carrierContext,

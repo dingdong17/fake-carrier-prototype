@@ -38,10 +38,10 @@ export async function POST(request: NextRequest) {
       .where(eq(documents.id, documentId))
       .run();
 
-    // Step 2: If it's an insurance cert, extract key fields
+    // Step 2: Extract fields from recognized document types
     let extractedData: Record<string, unknown> | null = null;
 
-    if (classification.documentType === "insurance-cert") {
+    if (classification.documentType !== "unknown") {
       const result = await claudeDocumentProvider.analyze(
         doc.filePath,
         classification.documentType,
