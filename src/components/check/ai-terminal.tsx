@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 interface AiTerminalProps {
   lines: string[];
   isActive: boolean;
+  /** Name of the document currently being processed */
+  activeDocName?: string | null;
 }
 
 const THINKING_MESSAGES = [
@@ -67,7 +69,7 @@ function useThinkingLine(isActive: boolean) {
 
     const interval = setInterval(() => {
       setThinkingLine(pickRandom());
-    }, 2000 + Math.random() * 2000); // 2-4 seconds
+    }, 2000 + Math.random() * 2000);
 
     return () => clearInterval(interval);
   }, [isActive]);
@@ -75,15 +77,49 @@ function useThinkingLine(isActive: boolean) {
   return thinkingLine;
 }
 
-export function AiTerminal({ lines, isActive }: AiTerminalProps) {
+function useElapsedTimer(isActive: boolean) {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!isActive) {
+      setElapsed(0);
+      return;
+    }
+
+    startRef.current = Date.now();
+    setElapsed(0);
+
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isActive]);
+
+  return elapsed;
+}
+
+function formatTimer(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+export function AiTerminal({ lines, isActive, activeDocName }: AiTerminalProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const thinkingLine = useThinkingLine(isActive);
+  const elapsed = useElapsedTimer(isActive);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [lines, thinkingLine]);
 
   if (lines.length === 0 && !isActive) return null;
+
+  const timeoutSec = 60;
+  const remaining = Math.max(0, timeoutSec - elapsed);
+  const isNearTimeout = remaining <= 15 && isActive;
 
   return (
     <div className="overflow-hidden rounded-lg border border-ec-dark-green/30 bg-[#0a0f0a] font-mono text-sm shadow-lg">
@@ -97,8 +133,27 @@ export function AiTerminal({ lines, isActive }: AiTerminalProps) {
         <span className="ml-2 text-xs text-[#4ade80]/60">
           ai-agent — Frachtführer-Prüfung
         </span>
+
+        {/* Active document + timer */}
         {isActive && (
-          <span className="ml-auto inline-block h-2 w-2 animate-pulse rounded-full bg-[#4ade80]" />
+          <div className="ml-auto flex items-center gap-3">
+            {activeDocName && (
+              <span className="text-xs text-[#4ade80]/50 truncate max-w-[200px]">
+                {activeDocName}
+              </span>
+            )}
+            <span className={`text-xs tabular-nums ${isNearTimeout ? "text-[#fbbf24]" : "text-[#4ade80]/40"}`}>
+              {formatTimer(elapsed)}
+            </span>
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#4ade80]" />
+          </div>
+        )}
+
+        {/* Completed state */}
+        {!isActive && lines.length > 0 && (
+          <span className="ml-auto text-xs text-[#4ade80]/40">
+            abgeschlossen
+          </span>
         )}
       </div>
 
@@ -121,7 +176,7 @@ export function AiTerminal({ lines, isActive }: AiTerminalProps) {
           );
         })}
 
-        {/* Active thinking line — rotates every 2-4 seconds */}
+        {/* Active thinking line */}
         {isActive && thinkingLine && (
           <div className="flex items-start gap-2 py-0.5">
             <span className="shrink-0 select-none text-[#4ade80]/40">
@@ -141,15 +196,15 @@ export function AiTerminal({ lines, isActive }: AiTerminalProps) {
 
 function getPrefix(line: string): string {
   if (line.startsWith("WARNUNG")) return "!!";
-  if (line.includes("fehlgeschlagen") || line.includes("Fehler")) return "XX";
-  if (line.includes("...") && !line.includes("bestätigt") && !line.includes("erkannt") && !line.includes("gültig") && !line.includes("gefunden")) return ">>";
+  if (line.includes("fehlgeschlagen") || line.includes("Fehler") || line.includes("Nicht gültig")) return "XX";
+  if (line.includes("...") && !line.includes("bestätigt") && !line.includes("erkannt") && !line.includes("gültig") && !line.includes("gefunden") && !line.includes("extrahiert") && !line.includes("identifiziert")) return ">>";
   return "OK";
 }
 
 function getColor(line: string): string {
   if (line.startsWith("WARNUNG")) return "text-[#fbbf24]";
   if (line.includes("fehlgeschlagen") || line.includes("Fehler") || line.includes("Nicht gültig")) return "text-[#f87171]";
-  if (line.includes("bestätigt") || line.includes("gültig") || line.includes("gefunden") || line.includes("erkannt") || line.includes("extrahiert")) return "text-[#4ade80]";
+  if (line.includes("bestätigt") || line.includes("gültig") || line.includes("gefunden") || line.includes("erkannt") || line.includes("extrahiert") || line.includes("identifiziert")) return "text-[#4ade80]";
   if (line.includes("...")) return "text-[#4ade80]/70";
   return "text-[#4ade80]/80";
 }

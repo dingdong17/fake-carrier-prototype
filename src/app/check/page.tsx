@@ -62,6 +62,7 @@ export default function CheckPage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingExtractions, setPendingExtractions] = useState<PendingExtraction[]>([]);
   const [analyzingDocId, setAnalyzingDocId] = useState<string | null>(null);
+  const [analyzingDocName, setAnalyzingDocName] = useState<string | null>(null);
   const [classificationLog, setClassificationLog] = useState<string[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([
     { id: "insurance-cert", labelDe: "Versicherungsnachweis", checked: false, autoDetected: false },
@@ -121,6 +122,7 @@ export default function CheckPage() {
         for (const doc of newDocs) {
           // Track which doc is being analyzed
           setAnalyzingDocId(doc.id);
+          setAnalyzingDocName(doc.fileName);
 
           // Phase 1: Upload acknowledged
           setClassificationLog((prev) => [...prev, `Dokument empfangen: "${doc.fileName}"`]);
@@ -300,10 +302,12 @@ export default function CheckPage() {
 
         setIsClassifying(false);
         setAnalyzingDocId(null);
+        setAnalyzingDocName(null);
       } catch (err) {
         setIsUploading(false);
         setIsClassifying(false);
         setAnalyzingDocId(null);
+        setAnalyzingDocName(null);
         setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
       }
     },
@@ -470,7 +474,7 @@ export default function CheckPage() {
               </Card>
 
               {/* AI Terminal — live activity feed */}
-              <AiTerminal lines={classificationLog} isActive={isClassifying} />
+              <AiTerminal lines={classificationLog} isActive={isClassifying} activeDocName={analyzingDocName} />
 
               {/* Document list */}
               {uploadedDocs.length > 0 && (
