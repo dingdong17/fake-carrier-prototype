@@ -12,6 +12,7 @@ import { ExtractionPreview } from "@/components/check/extraction-preview";
 import { AnalysisStream } from "@/components/check/analysis-stream";
 import type { AnalysisEvent } from "@/components/check/analysis-stream";
 import { DocumentChecklist } from "@/components/check/document-checklist";
+import { AiTerminal } from "@/components/check/ai-terminal";
 import type { ChecklistItem } from "@/components/check/document-checklist";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
@@ -446,21 +447,8 @@ export default function CheckPage() {
                 </CardContent>
               </Card>
 
-              {/* Classification log */}
-              {classificationLog.length > 0 && (
-                <Card>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {classificationLog.map((msg, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm">
-                          <span className="text-ec-success">✓</span>
-                          <span className="text-ec-grey-80">{msg}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {/* AI Terminal — live activity feed */}
+              <AiTerminal lines={classificationLog} isActive={isClassifying} />
 
               {/* Document list */}
               {uploadedDocs.length > 0 && (
@@ -523,6 +511,9 @@ export default function CheckPage() {
       {/* Step 2: Review extracted data & carrier form */}
       {step === 2 && (
         <div className="space-y-6">
+          {/* AI Terminal — shows what was done */}
+          <AiTerminal lines={classificationLog} isActive={false} />
+
           <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
             <Card>
               <CardHeader>
