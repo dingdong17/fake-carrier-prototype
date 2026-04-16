@@ -51,3 +51,4 @@ data/
 
 # Superpowers brainstorm sessions
 .superpowers/
+logs/

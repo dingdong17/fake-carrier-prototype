@@ -153,10 +153,13 @@ export default function CheckPage() {
               // Show timing analytics
               if (classifyData.timing) {
                 const t = classifyData.timing;
-                setClassificationLog((prev) => [
-                  ...prev,
-                  `Dokument: ${t.fileSizeKB}KB, Klassifizierung: ${(t.apiCallMs / 1000).toFixed(1)}s, Gesamt: ${(t.totalMs / 1000).toFixed(1)}s`,
-                ]);
+                const parts = [`${t.fileSizeKB}KB`];
+                parts.push(`Erkennung: ${(t.apiCallMs / 1000).toFixed(1)}s`);
+                if (t.extractMs > 0) {
+                  parts.push(`Extraktion: ${(t.extractMs / 1000).toFixed(1)}s`);
+                }
+                parts.push(`Gesamt: ${(t.totalRequestMs / 1000).toFixed(1)}s`);
+                setClassificationLog((prev) => [...prev, parts.join(" | ")]);
               }
 
               // Update doc in list
