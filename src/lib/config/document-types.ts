@@ -17,8 +17,8 @@ export const DOCUMENT_TYPES: Record<string, DocumentTypeConfig> = {
     required: true,
     confidenceWeight: 0.25,
     requiredFields: ["insurer", "policyNumber", "coveragePeriod", "coverageAmount", "insuredCompany", "contactInfo"],
-    optionalFields: ["coverageType", "deductible", "specialConditions"],
-    redFlagRules: ["generic-form", "missing-logo", "expired-period", "company-name-mismatch", "short-coverage-period"],
+    optionalFields: ["coverageType", "coInsuredCompanies", "deductible", "specialConditions", "geographicScope", "qualifiedFaultLimit"],
+    redFlagRules: ["generic-form", "missing-logo", "expired-period", "company-name-mismatch", "short-coverage-period", "missing-signature", "low-coverage"],
   },
   "transport-license": {
     id: "transport-license",

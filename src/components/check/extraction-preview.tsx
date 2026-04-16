@@ -10,8 +10,11 @@ interface ExtractedInsuranceData {
   insurer?: string | null;
   policyNumber?: string | null;
   coveragePeriod?: { start?: string | null; end?: string | null } | null;
-  coverageAmount?: { amount?: number | null; currency?: string | null } | null;
+  coverageAmount?: { amount?: number | null; currency?: string | null; description?: string | null } | null;
   contactInfo?: { phone?: string | null; email?: string | null; address?: string | null } | null;
+  coInsuredCompanies?: string[] | null;
+  coverageType?: string | null;
+  geographicScope?: string | null;
   [key: string]: unknown;
 }
 
@@ -56,10 +59,31 @@ export function ExtractionPreview({
       });
     }
 
+    if (extractedData.coverageAmount?.description) {
+      fields.push({
+        label: "Versicherungssumme (Details)",
+        value: extractedData.coverageAmount.description,
+      });
+    }
+
+    if (extractedData.coInsuredCompanies && extractedData.coInsuredCompanies.length > 0) {
+      fields.push({
+        label: "Mitversicherte Unternehmen",
+        value: extractedData.coInsuredCompanies.join("\n"),
+        formField: "coInsured",
+      });
+    }
+
+    if (extractedData.coverageType) {
+      fields.push({ label: "Versicherungsart", value: extractedData.coverageType });
+    }
+
+    if (extractedData.geographicScope) {
+      fields.push({ label: "Geltungsbereich", value: extractedData.geographicScope });
+    }
+
     if (extractedData.contactInfo?.address) {
-      // Try to extract country from address
-      const address = extractedData.contactInfo.address;
-      fields.push({ label: "Adresse (Versicherer)", value: address });
+      fields.push({ label: "Adresse (Versicherer)", value: extractedData.contactInfo.address });
     }
   }
 
