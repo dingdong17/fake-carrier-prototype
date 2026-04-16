@@ -25,11 +25,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Title is required" }, { status: 400 });
       }
 
-      const count = db
-        .select({ count: sql<number>`count(*)` })
+      const result = db
+        .select({ maxNum: sql<string>`max(item_number)` })
         .from(backlogItems)
         .get();
-      const seq = (count?.count || 0) + 1;
+      const lastNum = result?.maxNum ? parseInt(result.maxNum.replace("BL-", ""), 10) : 0;
+      const seq = (isNaN(lastNum) ? 0 : lastNum) + 1;
 
       const priority = ((body.priority as string) || "medium") as
         "critical" | "high" | "medium" | "low";

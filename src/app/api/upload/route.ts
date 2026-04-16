@@ -60,10 +60,12 @@ export async function POST(request: NextRequest) {
       // Create a new check — carrier name can be filled later (e.g. from AI extraction)
       resolvedCheckId = generateId();
       const result = db
-        .select({ count: sql<number>`count(*)` })
+        .select({ maxNum: sql<string>`max(check_number)` })
         .from(checks)
         .get();
-      const seq = (result?.count || 0) + 1;
+      // Extract sequence from "FC-009" → 9, then increment
+      const lastNum = result?.maxNum ? parseInt(result.maxNum.replace("FC-", ""), 10) : 0;
+      const seq = (isNaN(lastNum) ? 0 : lastNum) + 1;
       checkNumber = formatCheckNumber(seq);
 
       db.insert(checks)
@@ -136,7 +138,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Upload error:", error);
     return NextResponse.json(
-      { error: "Upload failed" },
+      { error: error instanceof Error ? error.message : "Upload failed", details: String(error) },
       { status: 500 }
     );
   }
