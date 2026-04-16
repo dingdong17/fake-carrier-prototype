@@ -17,6 +17,12 @@ import type { ChecklistItem } from "@/components/check/document-checklist";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { DOCUMENT_TYPES } from "@/lib/config/document-types";
+import {
+  getClassifyingMessage,
+  getIdentifiedMessage,
+  getExtractingMessages,
+  getExtractedMessage,
+} from "@/lib/terminal-messages";
 
 interface PendingExtraction {
   documentId: string;
@@ -112,7 +118,11 @@ export default function CheckPage() {
         setIsClassifying(true);
 
         for (const doc of newDocs) {
-          setClassificationLog((prev) => [...prev, `Analysiere "${doc.fileName}"...`]);
+          // Phase 1: Upload acknowledged
+          setClassificationLog((prev) => [...prev, `Dokument empfangen: "${doc.fileName}"`]);
+
+          // Phase 2: Classification
+          setClassificationLog((prev) => [...prev, getClassifyingMessage()]);
 
           try {
             const classifyRes = await fetch("/api/classify", {
@@ -125,6 +135,7 @@ export default function CheckPage() {
               const classifyData = await classifyRes.json();
               const typeConfig = DOCUMENT_TYPES[classifyData.documentType];
               const typeName = typeConfig?.labelDe || classifyData.documentType;
+              const docType = classifyData.documentType as string;
 
               // Update doc in list
               setUploadedDocs((prev) =>
@@ -132,31 +143,36 @@ export default function CheckPage() {
                   d.id === doc.id
                     ? {
                         ...d,
-                        documentType: classifyData.documentType,
+                        documentType: docType,
                         status: classifyData.extractedData ? "analyzed" : "uploaded",
                       }
                     : d
                 )
               );
 
-              if (classifyData.documentType !== "unknown") {
-                setClassificationLog((prev) => [...prev, `"${doc.fileName}" erkannt als: ${typeName}`]);
+              // Phase 3: Identification result — document-type-specific message
+              setClassificationLog((prev) => [...prev, getIdentifiedMessage(docType)]);
 
+              if (docType !== "unknown") {
                 // Tick the checklist
                 setChecklist((prev) =>
                   prev.map((item) =>
-                    item.id === classifyData.documentType
+                    item.id === docType
                       ? { ...item, checked: true, autoDetected: true, details: doc.fileName }
                       : item
                   )
                 );
-              } else {
-                setClassificationLog((prev) => [...prev, `"${doc.fileName}": Dokumenttyp konnte nicht bestimmt werden`]);
               }
 
-              // Handle extractions
+              // Phase 4: Extraction — show document-type-specific extraction messages
               if (classifyData.extractedData) {
-                setClassificationLog((prev) => [...prev, `Daten aus ${typeName} extrahiert`]);
+                const extractMsgs = getExtractingMessages(docType);
+                // Show 2-3 fitting extraction messages
+                const msgCount = Math.min(extractMsgs.length, 2 + Math.floor(Math.random() * 2));
+                for (let i = 0; i < msgCount; i++) {
+                  setClassificationLog((prev) => [...prev, extractMsgs[i]]);
+                }
+                setClassificationLog((prev) => [...prev, getExtractedMessage(docType)]);
 
                 // Check Verkehrshaftung
                 if (classifyData.extractedData.isVerkehrshaftung === true) {
