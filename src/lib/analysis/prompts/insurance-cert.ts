@@ -21,6 +21,19 @@ PFLICHTFELDER extrahieren:
 
 OPTIONALE FELDER:
 - coverageType: Art der Versicherung (z.B. "Verkehrshaftungsversicherung", "CMR", "F&S", "VKH")
+- isVerkehrshaftung: true/false — Prüfe ob es sich um eine VERKEHRSHAFTUNGSVERSICHERUNG handelt.
+  Erkennungsmerkmale (eines oder mehrere genügen):
+  - Titel enthält "Verkehrshaftung" oder "verkehrsvertragliche Haftung"
+  - Bezeichnung "F&S" (Frachtführer und Spediteure)
+  - Bezeichnung "VKH" (Verkehrshaftung)
+  - Bezeichnung "CMR-Versicherung" oder Bezug auf CMR-Übereinkommen
+  - Bezeichnung "Frachtführerhaftpflicht" oder "Frachtführerhaftungsversicherung"
+  - Bezeichnung "SVS" (Speditionsversicherungsschein) oder "RVS"
+  - Bezug auf §§ 407 ff. HGB (Frachtrecht)
+  - Bezug auf § 7a GüKG (Güterkraftverkehrsgesetz)
+  - Formulierungen wie "verkehrsvertragliche Haftung des Versicherungsnehmers"
+  - Bezug auf ADSp (Allgemeine Deutsche Spediteurbedingungen) oder VBGL
+  Setze true wenn EINES dieser Merkmale gefunden wird.
 - coInsuredCompanies: Liste der mitversicherten Unternehmen als Array von Strings. Suche unter "Mitversicherte:" und extrahiere jeden Firmennamen OHNE "Fa." oder "Firma" Präfix. Beispiel: "Fa. Sand-Körner GmbH" → "Sand-Körner GmbH"
 - deductible: Selbstbeteiligung (falls angegeben)
 - specialConditions: Besondere Bedingungen oder Ausschlüsse (Kurzfassung)
@@ -46,6 +59,7 @@ Antworte NUR mit einem JSON-Objekt:
     "insuredCompany": "Firmenname ohne Fa./Firma Präfix oder null",
     "contactInfo": { "phone": "Telefon oder null", "email": "E-Mail oder null", "address": "Adresse oder null" },
     "coverageType": "Art der Versicherung oder null",
+    "isVerkehrshaftung": true,
     "coInsuredCompanies": ["Firmenname 1 ohne Fa.", "Firmenname 2 ohne Fa."],
     "deductible": "Selbstbeteiligung oder null",
     "specialConditions": "Kurze Zusammenfassung besonderer Bedingungen oder null",

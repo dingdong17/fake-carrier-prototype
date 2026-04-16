@@ -11,6 +11,8 @@ import type { UploadedDoc } from "@/components/check/document-list";
 import { ExtractionPreview } from "@/components/check/extraction-preview";
 import { AnalysisStream } from "@/components/check/analysis-stream";
 import type { AnalysisEvent } from "@/components/check/analysis-stream";
+import { DocumentChecklist } from "@/components/check/document-checklist";
+import type { ChecklistItem } from "@/components/check/document-checklist";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { DOCUMENT_TYPES } from "@/lib/config/document-types";
@@ -53,6 +55,15 @@ export default function CheckPage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingExtractions, setPendingExtractions] = useState<PendingExtraction[]>([]);
   const [classificationLog, setClassificationLog] = useState<string[]>([]);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([
+    { id: "insurance-cert", labelDe: "Versicherungsnachweis vorhanden", checked: false, autoDetected: false },
+    { id: "is-verkehrshaftung", labelDe: "Verkehrshaftungsversicherung bestätigt", checked: false, autoDetected: false },
+    { id: "transport-license", labelDe: "EU-Transportlizenz vorhanden", checked: false, autoDetected: false },
+    { id: "letterhead", labelDe: "Briefkopf / Unternehmensdaten vorhanden", checked: false, autoDetected: false },
+    { id: "freight-profile", labelDe: "Frachtenbörsen-Profil vorhanden", checked: false, autoDetected: false },
+    { id: "communication", labelDe: "Kommunikation / E-Mails vorhanden", checked: false, autoDetected: false },
+    { id: "driver-vehicle", labelDe: "Fahrer- & Fahrzeugdaten vorhanden", checked: false, autoDetected: false },
+  ]);
 
   const handleFormChange = useCallback(
     (field: keyof CarrierFormData, value: string) => {
@@ -128,6 +139,15 @@ export default function CheckPage() {
 
               if (classifyData.documentType !== "unknown") {
                 log.push(`"${doc.fileName}" erkannt als: ${typeName}`);
+
+                // Tick the checklist for the detected document type
+                setChecklist((prev) =>
+                  prev.map((item) =>
+                    item.id === classifyData.documentType
+                      ? { ...item, checked: true, autoDetected: true, details: doc.fileName }
+                      : item
+                  )
+                );
               } else {
                 log.push(`"${doc.fileName}": Dokumenttyp konnte nicht bestimmt werden`);
               }
@@ -137,6 +157,20 @@ export default function CheckPage() {
               if (classifyData.extractedData) {
                 log.push(`Daten aus ${typeName} extrahiert`);
                 setClassificationLog([...log]);
+
+                // Check if it's a Verkehrshaftungsversicherung
+                if (classifyData.extractedData.isVerkehrshaftung === true) {
+                  log.push(`Verkehrshaftungsversicherung bestätigt`);
+                  setClassificationLog([...log]);
+                  setChecklist((prev) =>
+                    prev.map((item) =>
+                      item.id === "is-verkehrshaftung"
+                        ? { ...item, checked: true, autoDetected: true, details: classifyData.extractedData.coverageType || "Erkannt aus Dokumentinhalt" }
+                        : item
+                    )
+                  );
+                }
+
                 extractions.push({
                   documentId: doc.id,
                   documentType: classifyData.documentType,
@@ -289,7 +323,7 @@ export default function CheckPage() {
 
       {/* Step 1: Upload documents */}
       {step === 1 && (
-        <div className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
           <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold text-ec-dark-blue">
@@ -314,6 +348,9 @@ export default function CheckPage() {
                 {uploadedDocs.length > 0 && <DocumentList documents={uploadedDocs} />}
               </div>
             </CardContent>
+          </Card>
+          <Card className="h-fit">
+            <DocumentChecklist items={checklist} />
           </Card>
         </div>
       )}
@@ -350,7 +387,8 @@ export default function CheckPage() {
       {/* Step 3: Extraction results — user reviews and edits */}
       {step === 3 && (
         <div className="space-y-6">
-          {/* Classification summary */}
+          {/* Checklist + Classification summary */}
+          <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
           <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold text-ec-dark-blue">
@@ -369,6 +407,10 @@ export default function CheckPage() {
               <DocumentList documents={uploadedDocs} />
             </CardContent>
           </Card>
+          <Card className="h-fit">
+            <DocumentChecklist items={checklist} />
+          </Card>
+          </div>
 
           {/* Pending extractions to review */}
           {pendingExtractions.length > 0 && (
