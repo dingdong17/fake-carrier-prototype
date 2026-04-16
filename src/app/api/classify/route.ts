@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
       documentType: classification.documentType,
       classificationConfidence: classification.confidence,
       extractedData,
+      timing: classification.timing,
     });
   } catch (error) {
     console.error("Classification error:", error);

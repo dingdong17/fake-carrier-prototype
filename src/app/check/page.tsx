@@ -150,6 +150,15 @@ export default function CheckPage() {
               const typeName = typeConfig?.labelDe || classifyData.documentType;
               const docType = classifyData.documentType as string;
 
+              // Show timing analytics
+              if (classifyData.timing) {
+                const t = classifyData.timing;
+                setClassificationLog((prev) => [
+                  ...prev,
+                  `Dokument: ${t.fileSizeKB}KB, Klassifizierung: ${(t.apiCallMs / 1000).toFixed(1)}s, Gesamt: ${(t.totalMs / 1000).toFixed(1)}s`,
+                ]);
+              }
+
               // Update doc in list
               setUploadedDocs((prev) =>
                 prev.map((d) =>

@@ -27,10 +27,10 @@ const prompts: Record<string, string> = {
 const client = new Anthropic();
 
 /** Max time for classification (usually fast, single-purpose) */
-export const CLASSIFY_TIMEOUT_MS = 60000;
+export const CLASSIFY_TIMEOUT_MS = 90000;
 
 /** Max time for extraction (can be slow for large multi-page PDFs) */
-export const ANALYSIS_TIMEOUT_MS = 120000;
+export const ANALYSIS_TIMEOUT_MS = 180000;
 
 /** Wrap a promise with a timeout */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -116,10 +116,18 @@ function parseJsonResponse(text: string): Record<string, unknown> {
 export async function classifyDocument(
   documentPath: string,
   mimeType: string
-): Promise<{ documentType: string; confidence: number; reasoning: string }> {
+): Promise<{ documentType: string; confidence: number; reasoning: string; timing: { fileReadMs: number; fileSizeKB: number; apiCallMs: number; totalMs: number } }> {
+  const totalStart = Date.now();
+
+  const readStart = Date.now();
   const fileBuffer = readFileSync(documentPath);
   const base64Data = fileBuffer.toString("base64");
+  const fileReadMs = Date.now() - readStart;
+  const fileSizeKB = Math.round(fileBuffer.length / 1024);
 
+  console.log(`[classify] File: ${documentPath}, Size: ${fileSizeKB}KB, Read: ${fileReadMs}ms`);
+
+  const apiStart = Date.now();
   const response = await withTimeout(
     client.messages.create({
       model: "claude-sonnet-4-20250514",
@@ -139,8 +147,11 @@ export async function classifyDocument(
       ],
     }),
     CLASSIFY_TIMEOUT_MS,
-    "Dokumentklassifizierung"
+    `Dokumentklassifizierung (${fileSizeKB}KB)`
   );
+  const apiCallMs = Date.now() - apiStart;
+
+  console.log(`[classify] API call: ${apiCallMs}ms, Input tokens: ${response.usage?.input_tokens}, Output tokens: ${response.usage?.output_tokens}`);
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {
@@ -148,10 +159,14 @@ export async function classifyDocument(
   }
 
   const parsed = parseJsonResponse(textBlock.text);
+  const totalMs = Date.now() - totalStart;
+  console.log(`[classify] Total: ${totalMs}ms, Result: ${parsed.documentType}`);
+
   return {
     documentType: (parsed.documentType as string) || "unknown",
     confidence: (parsed.confidence as number) || 0,
     reasoning: (parsed.reasoning as string) || "",
+    timing: { fileReadMs, fileSizeKB, apiCallMs, totalMs },
   };
 }
 
@@ -165,12 +180,18 @@ export const claudeDocumentProvider: AnalysisProvider = {
     mimeType: string,
     carrierInfo: { name: string; country?: string; vatId?: string }
   ): Promise<ProviderResult> {
+    const totalStart = Date.now();
+
     const fileBuffer = readFileSync(documentPath);
     const base64Data = fileBuffer.toString("base64");
+    const fileSizeKB = Math.round(fileBuffer.length / 1024);
     const prompt = getAnalysisPrompt(documentType);
 
     const carrierContext = `\n\nKONTEXT zum Frachtführer:\n- Name: ${carrierInfo.name}${carrierInfo.country ? `\n- Land: ${carrierInfo.country}` : ""}${carrierInfo.vatId ? `\n- USt-IdNr: ${carrierInfo.vatId}` : ""}`;
 
+    console.log(`[analyze] File: ${documentPath}, Size: ${fileSizeKB}KB, Type: ${documentType}, Timeout: ${ANALYSIS_TIMEOUT_MS / 1000}s`);
+
+    const apiStart = Date.now();
     const response = await withTimeout(
       client.messages.create({
         model: "claude-sonnet-4-20250514",
@@ -190,13 +211,19 @@ export const claudeDocumentProvider: AnalysisProvider = {
         ],
       }),
       ANALYSIS_TIMEOUT_MS,
-      "Dokumentanalyse"
+      `Dokumentanalyse (${fileSizeKB}KB, ${documentType})`
     );
+    const apiCallMs = Date.now() - apiStart;
+
+    console.log(`[analyze] API call: ${apiCallMs}ms, Input tokens: ${response.usage?.input_tokens}, Output tokens: ${response.usage?.output_tokens}`);
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
       throw new Error("No text response from analysis");
     }
+
+    const totalMs = Date.now() - totalStart;
+    console.log(`[analyze] Total: ${totalMs}ms`);
 
     const rawResponse = textBlock.text;
     const parsed = parseJsonResponse(rawResponse);

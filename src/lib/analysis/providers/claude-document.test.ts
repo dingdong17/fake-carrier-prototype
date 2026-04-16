@@ -20,8 +20,8 @@ describe("claude-document provider structure", () => {
   it("exports timeout constants", async () => {
     const mod = await import("./claude-document");
     expect(typeof mod.CLASSIFY_TIMEOUT_MS).toBe("number");
-    expect(mod.CLASSIFY_TIMEOUT_MS).toBe(60000);
+    expect(mod.CLASSIFY_TIMEOUT_MS).toBe(90000);
     expect(typeof mod.ANALYSIS_TIMEOUT_MS).toBe("number");
-    expect(mod.ANALYSIS_TIMEOUT_MS).toBe(120000);
+    expect(mod.ANALYSIS_TIMEOUT_MS).toBe(180000);
   });
 });
