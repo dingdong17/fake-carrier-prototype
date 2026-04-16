@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
 
     if (vatId) {
       checks.push(
-        validateVatNumber(vatId).then((r) => {
+        validateVatNumber(vatId, companyName || undefined).then((r) => {
           results.vatValidation = r;
         })
       );

@@ -38,7 +38,7 @@ export function ExtractionPreview({
   if (documentType === "insurance-cert") {
     fields.push(
       { label: "Versichertes Unternehmen", value: extractedData.insuredCompany as string | null, formField: "carrierName" },
-      { label: "USt-IdNr.", value: extractedData.vatId as string | null, formField: "carrierVatId" },
+      { label: "USt-IdNr. (Versicherungsnehmer)", value: (extractedData.vatIdCarrier as string | null), formField: "carrierVatId" },
       { label: "Versicherer", value: extractedData.insurer as string | null, formField: "insurer" },
       { label: "Policennummer", value: extractedData.policyNumber as string | null, formField: "policyNumber" },
     );

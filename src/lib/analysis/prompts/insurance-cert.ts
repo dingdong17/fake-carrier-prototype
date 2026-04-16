@@ -18,7 +18,8 @@ PFLICHTFELDER extrahieren:
 - coverageAmount: Deckungssumme / Höchstentschädigung (Betrag und Währung, z.B. "5 Mio. Euro je Schadenereignis")
 - insuredCompany: Name des Versicherungsnehmers / versicherten Unternehmens (OHNE "Firma" oder "Fa." Präfix)
 - contactInfo: Kontaktdaten des Versicherers (Adresse, Telefon, E-Mail falls vorhanden)
-- vatId: Umsatzsteuer-Identifikationsnummer (USt-IdNr.) des Versicherungsnehmers oder des Versicherers, falls im Dokument angegeben. Format z.B. "DE123456789". Suche auch nach "UID", "Steuernummer", "USt-ID", "VAT", "Umsatzsteuer-Identifikationsnummer"
+- vatIdCarrier: Umsatzsteuer-Identifikationsnummer (USt-IdNr.) des VERSICHERUNGSNEHMERS (des Frachtführers/Carriers), NICHT des Versicherers. Format z.B. "DE123456789", "PL1234567890". Suche im Bereich des Versicherungsnehmers nach "USt-ID", "UID", "VAT", "NIP", "Umsatzsteuer-Identifikationsnummer", "Steuernummer". WICHTIG: Die USt-IdNr. des Versicherers (z.B. im Fußbereich des Dokuments) ist NICHT gemeint.
+- vatIdInsurer: Umsatzsteuer-Identifikationsnummer (USt-IdNr.) des VERSICHERERS, falls separat angegeben (oft im Briefkopf/Fußbereich des Dokuments)
 
 OPTIONALE FELDER:
 - coverageType: Art der Versicherung (z.B. "Verkehrshaftungsversicherung", "CMR", "F&S", "VKH")
@@ -59,7 +60,8 @@ Antworte NUR mit einem JSON-Objekt:
     "coverageAmount": { "amount": 5000000, "currency": "EUR", "description": "z.B. 5 Mio. Euro je Schadenereignis" },
     "insuredCompany": "Firmenname ohne Fa./Firma Präfix oder null",
     "contactInfo": { "phone": "Telefon oder null", "email": "E-Mail oder null", "address": "Adresse oder null" },
-    "vatId": "USt-IdNr. oder null",
+    "vatIdCarrier": "USt-IdNr. des Versicherungsnehmers oder null",
+    "vatIdInsurer": "USt-IdNr. des Versicherers oder null",
     "coverageType": "Art der Versicherung oder null",
     "isVerkehrshaftung": true,
     "coInsuredCompanies": ["Firmenname 1 ohne Fa.", "Firmenname 2 ohne Fa."],

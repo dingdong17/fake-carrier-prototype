@@ -181,7 +181,7 @@ export default function CheckPage() {
 
                 // Auto-verify: VAT + Website check
                 const companyName = classifyData.extractedData.insuredCompany as string | undefined;
-                const vatId = classifyData.extractedData.vatId as string | undefined;
+                const vatId = classifyData.extractedData.vatIdCarrier as string | undefined;
 
                 if (companyName || vatId) {
                   setClassificationLog((prev) => [...prev, "Unternehmensprüfung wird durchgeführt..."]);
@@ -203,17 +203,37 @@ export default function CheckPage() {
                       if (verifyData.vatValidation) {
                         const vat = verifyData.vatValidation;
                         if (vat.valid) {
-                          setClassificationLog((prev) => [
-                            ...prev,
-                            `USt-IdNr. ${vatId} ist gültig` + (vat.registeredName ? ` (${vat.registeredName})` : ""),
-                          ]);
+                          let vatMsg = `USt-IdNr. ${vatId} ist gültig`;
+                          if (vat.registeredName && vat.registeredName !== "---") {
+                            vatMsg += ` — registriert auf: "${vat.registeredName}"`;
+                            if (vat.nameMatchesDocument === true) {
+                              vatMsg += " (stimmt mit Dokument überein)";
+                            } else if (vat.nameMatchesDocument === false) {
+                              vatMsg += " (ACHTUNG: Name weicht vom Dokument ab!)";
+                            }
+                          } else {
+                            vatMsg += " (Land liefert keinen Firmennamen über VIES)";
+                          }
+                          setClassificationLog((prev) => [...prev, vatMsg]);
+
+                          const checkDetails = vat.registeredName && vat.registeredName !== "---"
+                            ? `${vatId} → ${vat.registeredName}`
+                            : `${vatId} gültig`;
                           setChecklist((prev) =>
                             prev.map((item) =>
                               item.id === "vat-valid"
-                                ? { ...item, checked: true, autoDetected: true, details: vat.registeredName || `${vatId} gültig` }
+                                ? { ...item, checked: true, autoDetected: true, details: checkDetails }
                                 : item
                             )
                           );
+
+                          // Name mismatch = critical warning
+                          if (vat.nameMatchesDocument === false) {
+                            setClassificationLog((prev) => [
+                              ...prev,
+                              `WARNUNG: USt-IdNr. ${vatId} ist auf "${vat.registeredName}" registriert, nicht auf "${companyName}"`,
+                            ]);
+                          }
                         } else {
                           setClassificationLog((prev) => [
                             ...prev,
