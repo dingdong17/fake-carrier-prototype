@@ -117,9 +117,9 @@ export function AiTerminal({ lines, isActive, activeDocName }: AiTerminalProps) 
 
   if (lines.length === 0 && !isActive) return null;
 
-  const timeoutSec = 60;
+  const timeoutSec = 120;
   const remaining = Math.max(0, timeoutSec - elapsed);
-  const isNearTimeout = remaining <= 15 && isActive;
+  const isNearTimeout = remaining <= 20 && isActive;
 
   return (
     <div className="overflow-hidden rounded-lg border border-ec-dark-green/30 bg-[#0a0f0a] font-mono text-sm shadow-lg">

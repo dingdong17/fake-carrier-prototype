@@ -26,8 +26,11 @@ const prompts: Record<string, string> = {
 
 const client = new Anthropic();
 
-/** Max time for a single Claude API call (classify or analyze) */
-export const ANALYSIS_TIMEOUT_MS = 60000;
+/** Max time for classification (usually fast, single-purpose) */
+export const CLASSIFY_TIMEOUT_MS = 60000;
+
+/** Max time for extraction (can be slow for large multi-page PDFs) */
+export const ANALYSIS_TIMEOUT_MS = 120000;
 
 /** Wrap a promise with a timeout */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -135,7 +138,7 @@ export async function classifyDocument(
         },
       ],
     }),
-    ANALYSIS_TIMEOUT_MS,
+    CLASSIFY_TIMEOUT_MS,
     "Dokumentklassifizierung"
   );
 

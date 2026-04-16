@@ -17,10 +17,11 @@ describe("claude-document provider structure", () => {
     expect(typeof mod.claudeDocumentProvider.analyze).toBe("function");
   });
 
-  it("exports ANALYSIS_TIMEOUT_MS constant", async () => {
+  it("exports timeout constants", async () => {
     const mod = await import("./claude-document");
+    expect(typeof mod.CLASSIFY_TIMEOUT_MS).toBe("number");
+    expect(mod.CLASSIFY_TIMEOUT_MS).toBe(60000);
     expect(typeof mod.ANALYSIS_TIMEOUT_MS).toBe("number");
-    expect(mod.ANALYSIS_TIMEOUT_MS).toBeGreaterThanOrEqual(30000);
-    expect(mod.ANALYSIS_TIMEOUT_MS).toBeLessThanOrEqual(120000);
+    expect(mod.ANALYSIS_TIMEOUT_MS).toBe(120000);
   });
 });
