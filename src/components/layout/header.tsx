@@ -10,8 +10,9 @@ export function Header() {
           <Image
             src="/ecclesia-logo.svg"
             alt="Ecclesia Gruppe"
-            width={140}
-            height={32}
+            width={28}
+            height={28}
+            className="mr-1"
             priority
           />
           <span className="hidden font-barlow text-lg font-semibold text-ec-dark-blue sm:inline">
