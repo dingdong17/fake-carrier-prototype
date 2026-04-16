@@ -35,36 +35,51 @@ export function ExtractionPreview({
 }: ExtractionPreviewProps) {
   const fields: Array<{ label: string; value: string | null | undefined; formField?: keyof CarrierFormData }> = [];
 
-  if (documentType === "insurance-cert") {
-    fields.push(
-      { label: "Versichertes Unternehmen", value: extractedData.insuredCompany as string | null, formField: "carrierName" },
-      { label: "USt-IdNr. (Versicherungsnehmer)", value: (extractedData.vatIdCarrier as string | null), formField: "carrierVatId" },
-      { label: "Versicherer", value: extractedData.insurer as string | null, formField: "insurer" },
-      { label: "Policennummer", value: extractedData.policyNumber as string | null, formField: "policyNumber" },
-    );
+  // Map known fields to form fields for carrier info pre-fill
+  const CARRIER_FIELD_MAP: Record<string, { label: string; formField?: keyof CarrierFormData }> = {
+    insuredCompany: { label: "Versichertes Unternehmen", formField: "carrierName" },
+    companyName: { label: "Firmenname", formField: "carrierName" },
+    vatIdCarrier: { label: "USt-IdNr. (Versicherungsnehmer)", formField: "carrierVatId" },
+    vatId: { label: "USt-IdNr.", formField: "carrierVatId" },
+    insurer: { label: "Versicherer", formField: "insurer" },
+    policyNumber: { label: "Policennummer", formField: "policyNumber" },
+    coverageType: { label: "Versicherungsart" },
+    geographicScope: { label: "Geltungsbereich" },
+    licenseNumber: { label: "Lizenznummer" },
+    authority: { label: "Ausstellende Behörde" },
+    legalForm: { label: "Rechtsform" },
+    address: { label: "Adresse" },
+    companyAddress: { label: "Firmenadresse" },
+    phone: { label: "Telefon" },
+    email: { label: "E-Mail" },
+    driverName: { label: "Fahrername" },
+    driverId: { label: "Ausweis-Nr." },
+    licensePlate: { label: "Kennzeichen" },
+    vehicleType: { label: "Fahrzeugtyp" },
+    senderEmail: { label: "E-Mail Absender" },
+    contactPerson: { label: "Ansprechpartner" },
+    memberSince: { label: "Mitglied seit" },
+  };
 
+  // Insurance-cert specific complex fields
+  if (documentType === "insurance-cert") {
     if (extractedData.coveragePeriod) {
-      fields.push(
-        { label: "Deckung von", value: extractedData.coveragePeriod.start, formField: "coverageStart" },
-        { label: "Deckung bis", value: extractedData.coveragePeriod.end, formField: "coverageEnd" },
-      );
+      const cp = extractedData.coveragePeriod;
+      if (cp.start) fields.push({ label: "Deckung von", value: cp.start, formField: "coverageStart" });
+      if (cp.end) fields.push({ label: "Deckung bis", value: cp.end, formField: "coverageEnd" });
     }
 
     if (extractedData.coverageAmount) {
       const amount = extractedData.coverageAmount.amount;
       const currency = extractedData.coverageAmount.currency || "EUR";
-      fields.push({
-        label: "Versicherungssumme",
-        value: amount != null ? `${amount.toLocaleString("de-DE")} ${currency}` : null,
-        formField: "sumInsured",
-      });
-    }
-
-    if (extractedData.coverageAmount?.description) {
-      fields.push({
-        label: "Versicherungssumme (Details)",
-        value: extractedData.coverageAmount.description,
-      });
+      const desc = extractedData.coverageAmount.description;
+      if (amount != null) {
+        fields.push({
+          label: "Versicherungssumme",
+          value: desc || `${amount.toLocaleString("de-DE")} ${currency}`,
+          formField: "sumInsured",
+        });
+      }
     }
 
     if (extractedData.coInsuredCompanies && extractedData.coInsuredCompanies.length > 0) {
@@ -74,17 +89,43 @@ export function ExtractionPreview({
         formField: "coInsured",
       });
     }
+  }
 
-    if (extractedData.coverageType) {
-      fields.push({ label: "Versicherungsart", value: extractedData.coverageType });
+  // Transport license validity period
+  if (documentType === "transport-license" && extractedData.validityPeriod) {
+    const vp = extractedData.validityPeriod as { start?: string; end?: string };
+    if (vp.start) fields.push({ label: "Gültig von", value: vp.start });
+    if (vp.end) fields.push({ label: "Gültig bis", value: vp.end });
+  }
+
+  // Generic: map all simple string/number fields
+  for (const [key, value] of Object.entries(extractedData)) {
+    // Skip complex/already-handled fields
+    if (["coveragePeriod", "coverageAmount", "coInsuredCompanies", "validityPeriod",
+         "contactInfo", "isVerkehrshaftung", "vatIdInsurer", "bankDetails"].includes(key)) continue;
+    if (value === null || value === undefined || typeof value === "object") continue;
+
+    const mapped = CARRIER_FIELD_MAP[key];
+    const label = mapped?.label || key;
+    const stringValue = String(value);
+
+    // Skip if already added
+    if (fields.some((f) => f.label === label)) continue;
+
+    fields.push({ label, value: stringValue, formField: mapped?.formField });
+  }
+
+  // Contact info (if present)
+  if (extractedData.contactInfo) {
+    const ci = extractedData.contactInfo;
+    if (ci.address && !fields.some((f) => f.label.includes("Adresse"))) {
+      fields.push({ label: "Adresse", value: ci.address });
     }
-
-    if (extractedData.geographicScope) {
-      fields.push({ label: "Geltungsbereich", value: extractedData.geographicScope });
+    if (ci.phone && !fields.some((f) => f.label.includes("Telefon"))) {
+      fields.push({ label: "Telefon", value: ci.phone });
     }
-
-    if (extractedData.contactInfo?.address) {
-      fields.push({ label: "Adresse (Versicherer)", value: extractedData.contactInfo.address });
+    if (ci.email && !fields.some((f) => f.label.includes("E-Mail"))) {
+      fields.push({ label: "E-Mail", value: ci.email });
     }
   }
 

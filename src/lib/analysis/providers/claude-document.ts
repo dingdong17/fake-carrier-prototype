@@ -26,6 +26,19 @@ const prompts: Record<string, string> = {
 
 const client = new Anthropic();
 
+/** Max time for a single Claude API call (classify or analyze) */
+export const ANALYSIS_TIMEOUT_MS = 60000;
+
+/** Wrap a promise with a timeout */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label}: Zeitüberschreitung nach ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
+
 function isPdf(mimeType: string): boolean {
   return mimeType === "application/pdf" || mimeType.endsWith(".pdf");
 }
@@ -104,23 +117,27 @@ export async function classifyDocument(
   const fileBuffer = readFileSync(documentPath);
   const base64Data = fileBuffer.toString("base64");
 
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: [
-          buildDocumentContent(base64Data, mimeType),
-          {
-            type: "text",
-            text: CLASSIFY_PROMPT,
-          },
-        ],
-      },
-    ],
-  });
+  const response = await withTimeout(
+    client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            buildDocumentContent(base64Data, mimeType),
+            {
+              type: "text",
+              text: CLASSIFY_PROMPT,
+            },
+          ],
+        },
+      ],
+    }),
+    ANALYSIS_TIMEOUT_MS,
+    "Dokumentklassifizierung"
+  );
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {
@@ -151,23 +168,27 @@ export const claudeDocumentProvider: AnalysisProvider = {
 
     const carrierContext = `\n\nKONTEXT zum Frachtführer:\n- Name: ${carrierInfo.name}${carrierInfo.country ? `\n- Land: ${carrierInfo.country}` : ""}${carrierInfo.vatId ? `\n- USt-IdNr: ${carrierInfo.vatId}` : ""}`;
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            buildDocumentContent(base64Data, mimeType),
-            {
-              type: "text",
-              text: prompt + carrierContext,
-            },
-          ],
-        },
-      ],
-    });
+    const response = await withTimeout(
+      client.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: [
+              buildDocumentContent(base64Data, mimeType),
+              {
+                type: "text",
+                text: prompt + carrierContext,
+              },
+            ],
+          },
+        ],
+      }),
+      ANALYSIS_TIMEOUT_MS,
+      "Dokumentanalyse"
+    );
 
     const textBlock = response.content.find((block) => block.type === "text");
     if (!textBlock || textBlock.type !== "text") {
