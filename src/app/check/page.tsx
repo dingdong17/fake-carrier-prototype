@@ -37,6 +37,8 @@ const INITIAL_FORM: CarrierFormData = {
   carrierName: "",
   carrierCountry: "",
   carrierVatId: "",
+  carrierEmail: "",
+  carrierWebsite: "",
   insurer: "",
   policyNumber: "",
   coverageStart: "",
@@ -72,6 +74,8 @@ export default function CheckPage() {
     { id: "is-verkehrshaftung", labelDe: "Verkehrshaftung bestätigt", checked: false, autoDetected: false },
     { id: "vat-valid", labelDe: "USt-IdNr. geprüft", checked: false, autoDetected: false },
     { id: "website-exists", labelDe: "Webseite erreichbar", checked: false, autoDetected: false },
+    { id: "domain-age", labelDe: "Domain-Alter geprüft", checked: false, autoDetected: false },
+    { id: "email-verified", labelDe: "E-Mail verifiziert", checked: false, autoDetected: false },
     { id: "transport-license", labelDe: "EU-Transportlizenz", checked: false, autoDetected: false },
     { id: "letterhead", labelDe: "Briefkopf / Firmendaten", checked: false, autoDetected: false },
     { id: "freight-profile", labelDe: "Frachtenbörsen-Profil", checked: false, autoDetected: false },
@@ -209,7 +213,19 @@ export default function CheckPage() {
                 const companyName = classifyData.extractedData.insuredCompany as string | undefined;
                 const vatId = classifyData.extractedData.vatIdCarrier as string | undefined;
 
-                if (companyName || vatId) {
+                // Extract email from communication or contact info
+                const extractedEmail = (classifyData.extractedData.senderEmail || classifyData.extractedData.email || classifyData.extractedData.contactInfo?.email || "") as string;
+                const extractedWebsite = (classifyData.extractedData.website || "") as string;
+
+                // Pre-fill email/website into form if found
+                if (extractedEmail) {
+                  setFormData((prev) => prev.carrierEmail ? prev : { ...prev, carrierEmail: extractedEmail });
+                }
+                if (extractedWebsite) {
+                  setFormData((prev) => prev.carrierWebsite ? prev : { ...prev, carrierWebsite: extractedWebsite });
+                }
+
+                if (companyName || vatId || extractedEmail) {
                   setClassificationLog((prev) => [...prev, "Unternehmensprüfung wird durchgeführt..."]);
 
                   try {
@@ -220,6 +236,8 @@ export default function CheckPage() {
                         companyName: companyName || "",
                         vatId: vatId || "",
                         country: "",
+                        email: extractedEmail || "",
+                        website: extractedWebsite || "",
                       }),
                     });
 
@@ -288,6 +306,77 @@ export default function CheckPage() {
                             `Keine Webseite gefunden für "${companyName}"`,
                           ]);
                         }
+                      }
+
+                      // Domain age check results
+                      if (verifyData.domainCheck) {
+                        const dom = verifyData.domainCheck;
+                        if (dom.exists && dom.ageInDays !== null) {
+                          const years = Math.floor(dom.ageInDays / 365);
+                          const months = Math.floor((dom.ageInDays % 365) / 30);
+                          const ageText = years > 0 ? `${years} Jahre, ${months} Monate` : `${months} Monate`;
+                          if (dom.isYoung) {
+                            setClassificationLog((prev) => [
+                              ...prev,
+                              `WARNUNG: Domain ${dom.domain} ist erst ${ageText} alt (< 6 Monate)`,
+                            ]);
+                          } else {
+                            setClassificationLog((prev) => [
+                              ...prev,
+                              `Domain ${dom.domain} registriert seit ${ageText}${dom.registrar ? ` (${dom.registrar})` : ""}`,
+                            ]);
+                          }
+                          setChecklist((prev) =>
+                            prev.map((item) =>
+                              item.id === "domain-age"
+                                ? {
+                                    ...item,
+                                    checked: true,
+                                    autoDetected: true,
+                                    details: dom.isYoung ? `Nur ${ageText} — Warnung!` : `${ageText} alt`,
+                                  }
+                                : item
+                            )
+                          );
+                        } else if (!dom.exists) {
+                          setClassificationLog((prev) => [...prev, `Domain ${dom.domain} nicht gefunden`]);
+                        }
+                      }
+
+                      // Email verification results
+                      if (verifyData.emailCheck) {
+                        const em = verifyData.emailCheck;
+                        const msgs: string[] = [];
+                        if (em.isFreemail) {
+                          msgs.push(`Freemail erkannt: ${em.freemailProvider}`);
+                        }
+                        if (!em.domainExists) {
+                          msgs.push(`E-Mail-Domain ${em.domain} existiert nicht!`);
+                        }
+                        if (em.domainMatchesCompany === false) {
+                          msgs.push(`E-Mail-Domain "${em.domain}" passt nicht zum Firmennamen`);
+                        } else if (em.domainMatchesCompany === true) {
+                          msgs.push(`E-Mail-Domain passt zum Firmennamen`);
+                        }
+                        if (msgs.length > 0) {
+                          setClassificationLog((prev) => [...prev, ...msgs]);
+                        }
+                        setChecklist((prev) =>
+                          prev.map((item) =>
+                            item.id === "email-verified"
+                              ? {
+                                  ...item,
+                                  checked: true,
+                                  autoDetected: true,
+                                  details: em.isFreemail
+                                    ? `Freemail: ${em.freemailProvider}`
+                                    : em.domainMatchesCompany
+                                      ? "Domain passt"
+                                      : em.domain,
+                                }
+                              : item
+                          )
+                        );
                       }
                     }
                   } catch {

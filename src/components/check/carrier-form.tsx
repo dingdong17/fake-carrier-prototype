@@ -6,6 +6,8 @@ export interface CarrierFormData {
   carrierName: string;
   carrierCountry: string;
   carrierVatId: string;
+  carrierEmail: string;
+  carrierWebsite: string;
   insurer: string;
   policyNumber: string;
   coverageStart: string;
@@ -49,6 +51,22 @@ export function CarrierForm({ data, onChange, disabled }: CarrierFormProps) {
             value={data.carrierVatId}
             onChange={(e) => onChange("carrierVatId", e.target.value)}
             placeholder="z.B. DE123456789"
+            disabled={disabled}
+          />
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            label="E-Mail des Frachtführers"
+            value={data.carrierEmail}
+            onChange={(e) => onChange("carrierEmail", e.target.value)}
+            placeholder="z.B. info@transport-gmbh.de"
+            disabled={disabled}
+          />
+          <Input
+            label="Webseite"
+            value={data.carrierWebsite}
+            onChange={(e) => onChange("carrierWebsite", e.target.value)}
+            placeholder="z.B. www.transport-gmbh.de"
             disabled={disabled}
           />
         </div>
