@@ -57,14 +57,7 @@ export async function POST(request: NextRequest) {
           .run();
       }
     } else {
-      // Create a new check
-      if (!carrierName) {
-        return NextResponse.json(
-          { error: "carrierName is required when creating a new check" },
-          { status: 400 }
-        );
-      }
-
+      // Create a new check — carrier name can be filled later (e.g. from AI extraction)
       resolvedCheckId = generateId();
       const result = db
         .select({ count: sql<number>`count(*)` })
@@ -77,7 +70,7 @@ export async function POST(request: NextRequest) {
         .values({
           id: resolvedCheckId,
           checkNumber,
-          carrierName,
+          carrierName: carrierName || "Unbekannt",
           carrierCountry: carrierCountry || null,
           carrierVatId: carrierVatId || null,
           status: "draft",
