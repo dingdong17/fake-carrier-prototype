@@ -382,6 +382,9 @@ export default function CheckPage() {
       return;
     }
 
+    // Save risk answers for the results page
+    localStorage.setItem(`risk-answers-${checkId}`, JSON.stringify(riskAnswers));
+
     // Update carrier info before analysis
     if (formData.carrierName) {
       const updateForm = new FormData();

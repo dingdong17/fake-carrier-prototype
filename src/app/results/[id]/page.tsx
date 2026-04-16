@@ -155,9 +155,31 @@ export default function ResultsPage() {
     );
   }
 
-  const riskScore = check.riskScore ?? 0;
+  // Load risk answers from localStorage
+  const storedAnswers = typeof window !== "undefined"
+    ? JSON.parse(localStorage.getItem(`risk-answers-${params.id}`) || "[]")
+    : [];
+  const riskQuestionPoints = storedAnswers.reduce((sum: number, a: { questionId: string; answer: string }) => {
+    if (a.answer !== "yes") return sum;
+    const POINTS: Record<string, number> = {
+      "email-only": 20, "time-pressure": 30, "unusually-low-price": 20,
+      "freemail-address": 15, "mobile-only": 15, "subcontracting": 25,
+      "platform-rating": -20, "live-tracking": -30,
+    };
+    return sum + (POINTS[a.questionId] || 0);
+  }, 0);
+
+  const baseRiskScore = check.riskScore ?? 0;
+  const riskScore = Math.max(0, Math.min(100, baseRiskScore + riskQuestionPoints));
   const confidenceLevel = check.confidenceLevel ?? 0;
-  const recommendation = check.recommendation ?? "review";
+
+  // Recalculate recommendation with adjusted score
+  let recommendation: "approve" | "review" | "warning" | "reject";
+  if (riskScore <= 25 && confidenceLevel >= 60) recommendation = "approve";
+  else if (riskScore >= 56 && confidenceLevel >= 40) recommendation = "reject";
+  else if (riskScore >= 56 && confidenceLevel < 40) recommendation = "warning";
+  else recommendation = "review";
+
   const providedTypes = [...new Set(documents.map((d) => d.documentType).filter((t) => t !== "unknown"))];
   const explanation = getExplanation(recommendation, riskScore, confidenceLevel);
   const createdDate = new Date(check.createdAt).toLocaleDateString("de-DE", {
@@ -205,6 +227,61 @@ export default function ResultsPage() {
             confidenceLevel={confidenceLevel}
           />
         </div>
+
+        {/* Risk question impact */}
+        {storedAnswers.length > 0 && riskQuestionPoints !== 0 && (
+          <div className="mb-6 rounded-xl border border-ec-medium-grey bg-white p-6 shadow-sm">
+            <h3 className="text-sm font-semibold text-ec-grey-80 mb-3 font-barlow">
+              Verhaltens- & Kontextbewertung
+            </h3>
+            <div className="space-y-2">
+              {storedAnswers
+                .filter((a: { answer: string }) => a.answer === "yes")
+                .map((a: { questionId: string; answer: string; autoDetected?: boolean; detail?: string }) => {
+                  const LABELS: Record<string, string> = {
+                    "email-only": "Nur E-Mail-Kommunikation",
+                    "time-pressure": "Zeitdruck bei Auftragsvergabe",
+                    "unusually-low-price": "Ungew\u00f6hnlich niedriger Preis",
+                    "freemail-address": "Freemail-Adresse verwendet",
+                    "mobile-only": "Nur Mobilnummer",
+                    "subcontracting": "Weitergabe an Unterfrachtf\u00fchrer",
+                    "platform-rating": "Positive Plattform-Bewertungen",
+                    "live-tracking": "Live-Tracking angeboten",
+                  };
+                  const POINTS: Record<string, number> = {
+                    "email-only": 20, "time-pressure": 30, "unusually-low-price": 20,
+                    "freemail-address": 15, "mobile-only": 15, "subcontracting": 25,
+                    "platform-rating": -20, "live-tracking": -30,
+                  };
+                  const pts = POINTS[a.questionId] || 0;
+                  return (
+                    <div key={a.questionId} className="flex items-center justify-between rounded-lg bg-ec-light-grey px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm ${pts > 0 ? "text-ec-error" : "text-ec-success"}`}>
+                          {pts > 0 ? "\u26a0" : "\u2713"}
+                        </span>
+                        <span className="text-sm text-ec-grey-80">
+                          {LABELS[a.questionId] || a.questionId}
+                        </span>
+                        {a.autoDetected && (
+                          <span className="text-[10px] font-medium text-ec-info">KI</span>
+                        )}
+                      </div>
+                      <span className={`text-sm font-semibold ${pts > 0 ? "text-ec-error" : "text-ec-success"}`}>
+                        {pts > 0 ? `+${pts}` : pts} Punkte
+                      </span>
+                    </div>
+                  );
+                })}
+              <div className="flex items-center justify-between border-t border-ec-medium-grey pt-2 mt-2">
+                <span className="text-sm font-medium text-ec-grey-80">Gesamteffekt Verhaltensanalyse</span>
+                <span className={`text-sm font-bold ${riskQuestionPoints > 0 ? "text-ec-error" : riskQuestionPoints < 0 ? "text-ec-success" : "text-ec-grey-70"}`}>
+                  {riskQuestionPoints > 0 ? `+${riskQuestionPoints}` : riskQuestionPoints} Punkte
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Grid: Chart + NextSteps + MissingDocs */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

@@ -14,7 +14,7 @@ const tierConfig: Record<
   { label: string; bg: string; border: string; iconBg: string; iconColor: string }
 > = {
   ai_verified: {
-    label: "Automatisch gepr\u00FCft",
+    label: "Automatisch geprüft",
     bg: "bg-ec-dark-blue/5",
     border: "border-ec-dark-blue/20",
     iconBg: "bg-ec-dark-blue/10",
@@ -28,7 +28,7 @@ const tierConfig: Record<
     iconColor: "text-ec-warning",
   },
   outside_scope: {
-    label: "Au\u00DFerhalb der Pr\u00FCfm\u00F6glichkeit",
+    label: "Außerhalb der Prüfmöglichkeit",
     bg: "bg-ec-grey-40/50",
     border: "border-ec-grey-60",
     iconBg: "bg-ec-grey-60",
@@ -63,7 +63,9 @@ export function GuidanceTier({ guidance }: GuidanceTierProps) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-ec-grey-80 font-barlow">Pr\u00FCfungsumfang</h3>
+      <h3 className="text-lg font-semibold font-barlow" style={{ color: "var(--brand-text)" }}>
+        {`Pr\u00fcfungsumfang`}
+      </h3>
       {tiers.map((tier) => {
         const items = guidance.filter((g) => g.tier === tier);
         if (items.length === 0) return null;
