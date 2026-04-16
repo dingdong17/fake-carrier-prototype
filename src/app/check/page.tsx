@@ -14,6 +14,8 @@ import type { AnalysisEvent } from "@/components/check/analysis-stream";
 import { DocumentChecklist } from "@/components/check/document-checklist";
 import { AiTerminal } from "@/components/check/ai-terminal";
 import type { ChecklistItem } from "@/components/check/document-checklist";
+import { RiskQuestions } from "@/components/check/risk-questions";
+import type { RiskAnswer } from "@/components/check/risk-questions";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { DOCUMENT_TYPES } from "@/lib/config/document-types";
@@ -63,6 +65,7 @@ export default function CheckPage() {
   const [pendingExtractions, setPendingExtractions] = useState<PendingExtraction[]>([]);
   const [analyzingDocId, setAnalyzingDocId] = useState<string | null>(null);
   const [analyzingDocName, setAnalyzingDocName] = useState<string | null>(null);
+  const [riskAnswers, setRiskAnswers] = useState<RiskAnswer[]>([]);
   const [classificationLog, setClassificationLog] = useState<string[]>([]);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([
     { id: "insurance-cert", labelDe: "Versicherungsnachweis", checked: false, autoDetected: false },
@@ -291,6 +294,27 @@ export default function CheckPage() {
                     setClassificationLog((prev) => [...prev, "Unternehmensprüfung fehlgeschlagen"]);
                   }
                 }
+
+                // Auto-detect behavioral risk signals from extracted data
+                const ed = classifyData.extractedData;
+
+                // Freemail detection
+                const email = (ed.senderEmail || ed.email || "") as string;
+                if (email && /gmail|gmx|hotmail|outlook|yahoo|web\.de|freenet|t-online/i.test(email)) {
+                  setRiskAnswers((prev) => {
+                    if (prev.some((a) => a.questionId === "freemail-address")) return prev;
+                    return [...prev, { questionId: "freemail-address", answer: "yes", autoDetected: true, detail: `Freemail erkannt: ${email}` }];
+                  });
+                  setClassificationLog((prev) => [...prev, `Freemail-Adresse erkannt: ${email}`]);
+                }
+
+                // Communication-only detection (if communication doc but no phone found)
+                if (docType === "communication" && !ed.phone) {
+                  setRiskAnswers((prev) => {
+                    if (prev.some((a) => a.questionId === "email-only")) return prev;
+                    return [...prev, { questionId: "email-only", answer: "yes", autoDetected: true, detail: "Nur E-Mail-Kommunikation im Dokument erkannt" }];
+                  });
+                }
               }
             } else {
               setClassificationLog((prev) => [...prev, `"${doc.fileName}": Klassifizierung fehlgeschlagen`]);
@@ -332,6 +356,16 @@ export default function CheckPage() {
 
   const handleDismissExtraction = useCallback(() => {
     setPendingExtractions((prev) => prev.slice(1));
+  }, []);
+
+  const handleRiskAnswer = useCallback((questionId: string, answer: "yes" | "no" | "unknown") => {
+    setRiskAnswers((prev) => {
+      const existing = prev.find((a) => a.questionId === questionId);
+      if (existing) {
+        return prev.map((a) => a.questionId === questionId ? { ...a, answer } : a);
+      }
+      return [...prev, { questionId, answer, autoDetected: false }];
+    });
   }, []);
 
   const handleProceedToReview = useCallback(() => {
@@ -562,6 +596,9 @@ export default function CheckPage() {
               <DocumentChecklist items={checklist} />
             </Card>
           </div>
+
+          {/* Behavioral risk questions */}
+          <RiskQuestions answers={riskAnswers} onAnswer={handleRiskAnswer} />
 
           <div className="flex items-center justify-between">
             <Button variant="ghost" onClick={handleBackToUpload}>
