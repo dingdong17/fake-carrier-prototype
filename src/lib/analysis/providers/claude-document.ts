@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { readFileSync } from "fs";
+import { readFileSync, statSync } from "fs";
 import { SYSTEM_PROMPT } from "../prompts/system";
 import { CLASSIFY_PROMPT } from "../prompts/classify";
 import { INSURANCE_CERT_PROMPT } from "../prompts/insurance-cert";
@@ -86,6 +86,68 @@ function buildDocumentContent(
   };
 }
 
+/** Threshold: PDFs larger than this get text-extracted instead of sent as binary */
+const PDF_SIZE_THRESHOLD_KB = 100;
+
+/**
+ * For large PDFs, extract text from the first N pages using pypdf (Python).
+ * This reduces token count from ~60K to ~4K for a typical 11-page document.
+ * Falls back to binary PDF if text extraction fails.
+ */
+async function extractPdfText(filePath: string, maxPages: number = 5): Promise<string | null> {
+  try {
+    const { execSync } = await import("child_process");
+    const script = `
+from pypdf import PdfReader
+reader = PdfReader("${filePath.replace(/"/g, '\\"')}")
+pages = min(${maxPages}, len(reader.pages))
+for i in range(pages):
+    text = reader.pages[i].extract_text()
+    if text:
+        print(f"--- SEITE {i+1} von {len(reader.pages)} ---")
+        print(text)
+`;
+    const result = execSync(`python3 -c '${script.replace(/'/g, "'\\''")}'`, {
+      timeout: 10000,
+      encoding: "utf-8",
+    });
+
+    if (result && result.trim().length > 100) {
+      console.log(`[pdf-text] Extracted ${result.length} chars (first ${maxPages} pages)`);
+      return result;
+    }
+    return null;
+  } catch (err) {
+    console.log(`[pdf-text] Text extraction failed, falling back to binary: ${err}`);
+    return null;
+  }
+}
+
+/**
+ * Build the content blocks for a Claude message.
+ * For large PDFs: extract text and send as text (fast, low tokens).
+ * For small PDFs/images: send as binary document/image (preserves layout).
+ */
+async function buildSmartContent(
+  filePath: string,
+  mimeType: string,
+): Promise<Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam>> {
+  const fileSizeKB = statSync(filePath).size / 1024;
+
+  if (isPdf(mimeType) && fileSizeKB > PDF_SIZE_THRESHOLD_KB) {
+    // Large PDF → extract text from first 5 pages
+    const text = await extractPdfText(filePath, 5);
+    if (text) {
+      console.log(`[smart-content] Using text extraction for ${Math.round(fileSizeKB)}KB PDF (${text.length} chars, ~${Math.round(text.length/4)} tokens vs ~${Math.round(fileSizeKB * 1.37)} tokens for binary)`);
+      return [{ type: "text", text: `[Dokumentinhalt - Erste Seiten]\n\n${text}` }];
+    }
+  }
+
+  // Small PDF or image → send as binary
+  const base64Data = readFileSync(filePath).toString("base64");
+  return [buildDocumentContent(base64Data, mimeType)];
+}
+
 function buildGenericPrompt(documentType: string): string {
   return `Analysiere dieses Dokument vom Typ "${documentType}" eines Frachtführers.
 
@@ -120,12 +182,11 @@ export async function classifyDocument(
   const totalStart = Date.now();
 
   const readStart = Date.now();
-  const fileBuffer = readFileSync(documentPath);
-  const base64Data = fileBuffer.toString("base64");
+  const fileSizeKB = Math.round(statSync(documentPath).size / 1024);
+  const contentBlocks = await buildSmartContent(documentPath, mimeType);
   const fileReadMs = Date.now() - readStart;
-  const fileSizeKB = Math.round(fileBuffer.length / 1024);
 
-  console.log(`[classify] File: ${documentPath}, Size: ${fileSizeKB}KB, Read: ${fileReadMs}ms`);
+  console.log(`[classify] File: ${documentPath}, Size: ${fileSizeKB}KB, Read+Extract: ${fileReadMs}ms`);
 
   const apiStart = Date.now();
   const response = await withTimeout(
@@ -137,7 +198,7 @@ export async function classifyDocument(
         {
           role: "user",
           content: [
-            buildDocumentContent(base64Data, mimeType),
+            ...contentBlocks,
             {
               type: "text",
               text: CLASSIFY_PROMPT,
@@ -182,9 +243,8 @@ export const claudeDocumentProvider: AnalysisProvider = {
   ): Promise<ProviderResult> {
     const totalStart = Date.now();
 
-    const fileBuffer = readFileSync(documentPath);
-    const base64Data = fileBuffer.toString("base64");
-    const fileSizeKB = Math.round(fileBuffer.length / 1024);
+    const fileSizeKB = Math.round(statSync(documentPath).size / 1024);
+    const contentBlocks = await buildSmartContent(documentPath, mimeType);
     const prompt = getAnalysisPrompt(documentType);
 
     const carrierContext = `\n\nKONTEXT zum Frachtführer:\n- Name: ${carrierInfo.name}${carrierInfo.country ? `\n- Land: ${carrierInfo.country}` : ""}${carrierInfo.vatId ? `\n- USt-IdNr: ${carrierInfo.vatId}` : ""}`;
@@ -201,7 +261,7 @@ export const claudeDocumentProvider: AnalysisProvider = {
           {
             role: "user",
             content: [
-              buildDocumentContent(base64Data, mimeType),
+              ...contentBlocks,
               {
                 type: "text",
                 text: prompt + carrierContext,
