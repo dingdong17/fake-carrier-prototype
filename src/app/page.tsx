@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { checks } from "@/lib/db/schema";
 import { desc, sql } from "drizzle-orm";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { RecentChecks } from "@/components/check/recent-checks";
 
 export const dynamic = "force-dynamic";
 
@@ -83,44 +83,7 @@ export default function HomePage() {
           Letzte Prüfungen
         </h2>
 
-        {recentChecks.length === 0 ? (
-          <p className="mt-4 text-sm text-ec-grey-80">
-            Noch keine Prüfungen durchgeführt.
-          </p>
-        ) : (
-          <ul className="mt-4 divide-y divide-ec-medium-grey">
-            {recentChecks.map((check) => {
-              const badge = check.recommendation
-                ? recBadge[check.recommendation]
-                : null;
-              return (
-                <li key={check.id}>
-                  <Link
-                    href={`/results/${check.id}`}
-                    className="flex items-center justify-between py-3 transition-colors hover:bg-ec-light-grey/50"
-                  >
-                    <div>
-                      <span className="font-medium text-ec-dark-blue">
-                        {check.carrierName}
-                      </span>
-                      <span className="ml-2 text-sm text-ec-grey-80">
-                        {check.checkNumber}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {badge && (
-                        <Badge variant={badge.variant}>{badge.label}</Badge>
-                      )}
-                      <span className="text-sm text-ec-grey-80">
-                        {new Date(check.createdAt).toLocaleDateString("de-DE")}
-                      </span>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        <RecentChecks initialChecks={recentChecks} />
 
         <div className="mt-4">
           <Link
