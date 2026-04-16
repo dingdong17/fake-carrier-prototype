@@ -17,7 +17,7 @@ const config: Record<
     icon: "\u2713",
   },
   review: {
-    label: "PR\u00DCFEN",
+    label: "PRÜFEN",
     bg: "bg-ec-yellow/15",
     text: "text-yellow-700",
     border: "border-ec-yellow/40",

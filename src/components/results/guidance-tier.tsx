@@ -64,7 +64,7 @@ export function GuidanceTier({ guidance }: GuidanceTierProps) {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold font-barlow" style={{ color: "var(--brand-text)" }}>
-        {`Pr\u00fcfungsumfang`}
+        {`Prüfungsumfang`}
       </h3>
       {tiers.map((tier) => {
         const items = guidance.filter((g) => g.tier === tier);

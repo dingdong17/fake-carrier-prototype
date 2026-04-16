@@ -45,63 +45,63 @@ interface GuidanceItem {
 const DEFAULT_GUIDANCE: GuidanceItem[] = [
   {
     tier: "ai_verified",
-    labelDe: "Automatisch gepr\u00FCft",
-    description: "Dokumentenfelder extrahiert und auf Konsistenz gepr\u00FCft",
+    labelDe: "Automatisch geprüft",
+    description: "Dokumentenfelder extrahiert und auf Konsistenz geprüft",
   },
   {
     tier: "ai_verified",
-    labelDe: "Automatisch gepr\u00FCft",
-    description: "Dokumenten\u00FCbergreifende Konsistenzpr\u00FCfung durchgef\u00FChrt",
+    labelDe: "Automatisch geprüft",
+    description: "Dokumentenübergreifende Konsistenzprüfung durchgeführt",
   },
   {
     tier: "human_required",
     labelDe: "Ihre Aktion erforderlich",
-    description: "Versicherungsschutz telefonisch beim Versicherer best\u00E4tigen lassen",
+    description: "Versicherungsschutz telefonisch beim Versicherer bestätigen lassen",
     action: "Rufen Sie den Versicherer unter der angegebenen Nummer an",
   },
   {
     tier: "human_required",
     labelDe: "Ihre Aktion erforderlich",
-    description: "Festnetznummer des Unternehmens durch R\u00FCckruf pr\u00FCfen",
+    description: "Festnetznummer des Unternehmens durch Rückruf prüfen",
     action: "Rufen Sie die Festnetznummer am Firmensitz an",
   },
   {
     tier: "human_required",
     labelDe: "Ihre Aktion erforderlich",
-    description: "Personen- und Lieferdokumente bei \u00DCbergabe der Ware pr\u00FCfen",
-    action: "Personalausweis, Frachtbrief und Kennzeichen bei \u00DCbergabe kontrollieren",
+    description: "Personen- und Lieferdokumente bei Übergabe der Ware prüfen",
+    action: "Personalausweis, Frachtbrief und Kennzeichen bei Übergabe kontrollieren",
   },
   {
     tier: "outside_scope",
-    labelDe: "Au\u00DFerhalb der Pr\u00FCfm\u00F6glichkeit",
-    description: "Aktuelle Solvenz und Zahlungsf\u00E4higkeit des Unternehmens",
+    labelDe: "Außerhalb der Prüfmöglichkeit",
+    description: "Aktuelle Solvenz und Zahlungsfähigkeit des Unternehmens",
   },
   {
     tier: "outside_scope",
-    labelDe: "Au\u00DFerhalb der Pr\u00FCfm\u00F6glichkeit",
+    labelDe: "Außerhalb der Prüfmöglichkeit",
     description: "Echtzeit-Fahrzeugortung und Sendungsverfolgung",
   },
   {
     tier: "outside_scope",
-    labelDe: "Au\u00DFerhalb der Pr\u00FCfm\u00F6glichkeit",
+    labelDe: "Außerhalb der Prüfmöglichkeit",
     description: "Strafrechtliche Vorgeschichte der beteiligten Personen",
   },
 ];
 
 const DEFAULT_NEXT_STEPS = [
-  "Versicherungsschutz telefonisch beim Versicherer best\u00E4tigen",
-  "Festnetznummer des Unternehmens durch R\u00FCckruf verifizieren",
+  "Versicherungsschutz telefonisch beim Versicherer bestätigen",
+  "Festnetznummer des Unternehmens durch Rückruf verifizieren",
   "Fehlende Dokumentfelder nachfordern",
 ];
 
 function getExplanation(recommendation: string | null, riskScore: number, confidenceLevel: number): string {
   switch (recommendation) {
     case "approve":
-      return `Der Frachtf\u00FChrer zeigt ein niedriges Risikoprofil (Score: ${riskScore.toFixed(0)}) bei hohem Vertrauensniveau (${confidenceLevel.toFixed(0)}%). Die eingereichten Dokumente sind konsistent und vollst\u00E4ndig.`;
+      return `Der Frachtführer zeigt ein niedriges Risikoprofil (Score: ${riskScore.toFixed(0)}) bei hohem Vertrauensniveau (${confidenceLevel.toFixed(0)}%). Die eingereichten Dokumente sind konsistent und vollständig.`;
     case "review":
-      return `Einige Aspekte erfordern eine manuelle Pr\u00FCfung. Risikoscore: ${riskScore.toFixed(0)}, Vertrauensniveau: ${confidenceLevel.toFixed(0)}%. Bitte pr\u00FCfen Sie die markierten Punkte.`;
+      return `Einige Aspekte erfordern eine manuelle Prüfung. Risikoscore: ${riskScore.toFixed(0)}, Vertrauensniveau: ${confidenceLevel.toFixed(0)}%. Bitte prüfen Sie die markierten Punkte.`;
     case "warning":
-      return `Mehrere Risikoindikatoren wurden identifiziert (Score: ${riskScore.toFixed(0)}). Das Vertrauensniveau liegt bei ${confidenceLevel.toFixed(0)}%. Eine gr\u00FCndliche manuelle Pr\u00FCfung wird empfohlen.`;
+      return `Mehrere Risikoindikatoren wurden identifiziert (Score: ${riskScore.toFixed(0)}). Das Vertrauensniveau liegt bei ${confidenceLevel.toFixed(0)}%. Eine gründliche manuelle Prüfung wird empfohlen.`;
     case "reject":
       return `Hohe Risikoindikatoren erkannt (Score: ${riskScore.toFixed(0)}). Vertrauensniveau: ${confidenceLevel.toFixed(0)}%. Eine Zusammenarbeit wird nicht empfohlen.`;
     default:
@@ -122,7 +122,7 @@ export default function ResultsPage() {
       try {
         const res = await fetch(`/api/checks?id=${params.id}`);
         if (!res.ok) {
-          throw new Error("Pr\u00FCfung nicht gefunden");
+          throw new Error("Prüfung nicht gefunden");
         }
         const data = await res.json();
         setCheck(data.check);
@@ -150,7 +150,7 @@ export default function ResultsPage() {
   if (error || !check) {
     return (
       <div className="min-h-screen bg-ec-light-grey flex items-center justify-center">
-        <div className="text-ec-error">{error ?? "Pr\u00FCfung nicht gefunden"}</div>
+        <div className="text-ec-error">{error ?? "Prüfung nicht gefunden"}</div>
       </div>
     );
   }
@@ -203,7 +203,7 @@ export default function ResultsPage() {
               {check.carrierName}
             </h1>
             <p className="text-sm text-ec-grey-70 mt-1">
-              Pr\u00FCfung {check.checkNumber} &middot; {createdDate}
+              Prüfung {check.checkNumber} &middot; {createdDate}
               {check.carrierCountry && <span> &middot; {check.carrierCountry}</span>}
             </p>
           </div>
@@ -241,10 +241,10 @@ export default function ResultsPage() {
                   const LABELS: Record<string, string> = {
                     "email-only": "Nur E-Mail-Kommunikation",
                     "time-pressure": "Zeitdruck bei Auftragsvergabe",
-                    "unusually-low-price": "Ungew\u00f6hnlich niedriger Preis",
+                    "unusually-low-price": "Ungewöhnlich niedriger Preis",
                     "freemail-address": "Freemail-Adresse verwendet",
                     "mobile-only": "Nur Mobilnummer",
-                    "subcontracting": "Weitergabe an Unterfrachtf\u00fchrer",
+                    "subcontracting": "Weitergabe an Unterfrachtführer",
                     "platform-rating": "Positive Plattform-Bewertungen",
                     "live-tracking": "Live-Tracking angeboten",
                   };
@@ -258,7 +258,7 @@ export default function ResultsPage() {
                     <div key={a.questionId} className="flex items-center justify-between rounded-lg bg-ec-light-grey px-4 py-2">
                       <div className="flex items-center gap-2">
                         <span className={`text-sm ${pts > 0 ? "text-ec-error" : "text-ec-success"}`}>
-                          {pts > 0 ? "\u26a0" : "\u2713"}
+                          {pts > 0 ? "⚠" : "✓"}
                         </span>
                         <span className="text-sm text-ec-grey-80">
                           {LABELS[a.questionId] || a.questionId}
