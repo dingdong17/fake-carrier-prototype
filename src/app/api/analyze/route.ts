@@ -113,12 +113,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!check.carrierName) {
-    return new Response(
-      JSON.stringify({ error: "Carrier name is required before analysis" }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
-    );
-  }
+  // Carrier name is optional — AI can analyze documents without it
+  // The name may be extracted from documents or filled later
 
   const stream = new ReadableStream({
     async start(controller) {

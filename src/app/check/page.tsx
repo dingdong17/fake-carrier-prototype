@@ -37,16 +37,22 @@ const INITIAL_FORM: CarrierFormData = {
 export default function CheckPage() {
   const router = useRouter();
 
+  // Flow steps:
+  // 1 = initial (show dropzone)
+  // 2 = AI is classifying/extracting uploaded documents
+  // 3 = extraction results shown, user reviews form data
+  // 4 = full analysis running (risk scoring, cross-check)
+  // 5 = analysis complete, redirecting to results
   const [step, setStep] = useState(1);
   const [checkId, setCheckId] = useState<string | null>(null);
   const [formData, setFormData] = useState<CarrierFormData>(INITIAL_FORM);
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [isClassifying, setIsClassifying] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisEvents, setAnalysisEvents] = useState<AnalysisEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [pendingExtraction, setPendingExtraction] = useState<PendingExtraction | null>(null);
+  const [pendingExtractions, setPendingExtractions] = useState<PendingExtraction[]>([]);
+  const [classificationLog, setClassificationLog] = useState<string[]>([]);
 
   const handleFormChange = useCallback(
     (field: keyof CarrierFormData, value: string) => {
@@ -61,21 +67,13 @@ export default function CheckPage() {
       setIsUploading(true);
 
       try {
+        // Step 1: Upload files
         const formDataUpload = new FormData();
         for (const file of files) {
           formDataUpload.append("files", file);
         }
         if (checkId) {
           formDataUpload.append("checkId", checkId);
-        }
-        if (formData.carrierName) {
-          formDataUpload.append("carrierName", formData.carrierName);
-        }
-        if (formData.carrierCountry) {
-          formDataUpload.append("carrierCountry", formData.carrierCountry);
-        }
-        if (formData.carrierVatId) {
-          formDataUpload.append("carrierVatId", formData.carrierVatId);
         }
 
         const res = await fetch("/api/upload", {
@@ -90,13 +88,19 @@ export default function CheckPage() {
 
         const data = await res.json();
         setCheckId(data.checkId);
-        setUploadedDocs((prev) => [...prev, ...data.documents]);
-
-        // Auto-classify each uploaded document
+        const newDocs = data.documents as UploadedDoc[];
+        setUploadedDocs((prev) => [...prev, ...newDocs]);
         setIsUploading(false);
-        setIsClassifying(true);
 
-        for (const doc of data.documents) {
+        // Step 2: Immediately start AI classification & extraction
+        setStep(2);
+        const log: string[] = [];
+        const extractions: PendingExtraction[] = [];
+
+        for (const doc of newDocs) {
+          log.push(`Analysiere "${doc.fileName}"...`);
+          setClassificationLog([...log]);
+
           try {
             const classifyRes = await fetch("/api/classify", {
               method: "POST",
@@ -106,40 +110,59 @@ export default function CheckPage() {
 
             if (classifyRes.ok) {
               const classifyData = await classifyRes.json();
+              const typeConfig = DOCUMENT_TYPES[classifyData.documentType];
+              const typeName = typeConfig?.labelDe || classifyData.documentType;
 
-              // Update document type in the list
+              // Update doc in list
               setUploadedDocs((prev) =>
                 prev.map((d) =>
                   d.id === doc.id
-                    ? { ...d, documentType: classifyData.documentType, status: classifyData.extractedData ? "analyzed" : "uploaded" }
+                    ? {
+                        ...d,
+                        documentType: classifyData.documentType,
+                        status: classifyData.extractedData ? "analyzed" : "uploaded",
+                      }
                     : d
                 )
               );
 
-              // If we got extracted data (insurance cert), show the preview
-              if (classifyData.extractedData && classifyData.documentType === "insurance-cert") {
-                const typeConfig = DOCUMENT_TYPES[classifyData.documentType];
-                setPendingExtraction({
+              if (classifyData.documentType !== "unknown") {
+                log.push(`"${doc.fileName}" erkannt als: ${typeName}`);
+              } else {
+                log.push(`"${doc.fileName}": Dokumenttyp konnte nicht bestimmt werden`);
+              }
+              setClassificationLog([...log]);
+
+              // Collect extractions for review
+              if (classifyData.extractedData) {
+                log.push(`Daten aus ${typeName} extrahiert`);
+                setClassificationLog([...log]);
+                extractions.push({
                   documentId: doc.id,
                   documentType: classifyData.documentType,
-                  documentTypeLabelDe: typeConfig?.labelDe || classifyData.documentType,
+                  documentTypeLabelDe: typeName,
                   extractedData: classifyData.extractedData,
                 });
               }
+            } else {
+              log.push(`"${doc.fileName}": Klassifizierung fehlgeschlagen`);
+              setClassificationLog([...log]);
             }
           } catch {
-            // Classification failed silently — document stays as "unknown"
+            log.push(`"${doc.fileName}": Fehler bei der Analyse`);
+            setClassificationLog([...log]);
           }
         }
 
-        setIsClassifying(false);
+        // Step 3: Show extraction results for user review
+        setPendingExtractions(extractions);
+        setStep(3);
       } catch (err) {
         setIsUploading(false);
-        setIsClassifying(false);
         setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
       }
     },
-    [checkId, formData]
+    [checkId]
   );
 
   const handleAcceptExtraction = useCallback(
@@ -148,47 +171,40 @@ export default function CheckPage() {
         const updated = { ...prev };
         for (const [key, value] of Object.entries(prefill)) {
           if (value && !prev[key as keyof CarrierFormData]) {
-            // Only fill empty fields
             updated[key as keyof CarrierFormData] = value;
           }
         }
         return updated;
       });
-      setPendingExtraction(null);
+      // Remove the accepted extraction from pending
+      setPendingExtractions((prev) => prev.slice(1));
     },
     []
   );
 
   const handleDismissExtraction = useCallback(() => {
-    setPendingExtraction(null);
+    setPendingExtractions((prev) => prev.slice(1));
   }, []);
 
-  const handleStartAnalysis = useCallback(async () => {
-    if (!formData.carrierName.trim()) {
-      setError("Bitte geben Sie einen Firmennamen ein.");
-      return;
-    }
-    if (uploadedDocs.length === 0) {
-      setError("Bitte laden Sie mindestens ein Dokument hoch.");
-      return;
-    }
+  const handleStartFullAnalysis = useCallback(async () => {
     if (!checkId) {
-      setError("Kein Check vorhanden. Bitte laden Sie zuerst Dokumente hoch.");
+      setError("Kein Check vorhanden.");
       return;
     }
 
-    // Update carrier info before analysis
-    const updateForm = new FormData();
-    updateForm.append("checkId", checkId);
-    updateForm.append("carrierName", formData.carrierName);
-    if (formData.carrierCountry) updateForm.append("carrierCountry", formData.carrierCountry);
-    if (formData.carrierVatId) updateForm.append("carrierVatId", formData.carrierVatId);
-    // Send a dummy empty file to trigger the update-only path
-    updateForm.append("files", new Blob([]), "");
-    await fetch("/api/upload", { method: "POST", body: updateForm }).catch(() => {});
+    // Update carrier info on the check before full analysis
+    if (formData.carrierName) {
+      const updateForm = new FormData();
+      updateForm.append("checkId", checkId);
+      updateForm.append("carrierName", formData.carrierName);
+      if (formData.carrierCountry) updateForm.append("carrierCountry", formData.carrierCountry);
+      if (formData.carrierVatId) updateForm.append("carrierVatId", formData.carrierVatId);
+      updateForm.append("files", new Blob([]), "");
+      await fetch("/api/upload", { method: "POST", body: updateForm }).catch(() => {});
+    }
 
     setError(null);
-    setStep(2);
+    setStep(4);
     setIsAnalyzing(true);
     setAnalysisEvents([]);
 
@@ -205,9 +221,7 @@ export default function CheckPage() {
       }
 
       const reader = res.body?.getReader();
-      if (!reader) {
-        throw new Error("Kein Stream verfügbar");
-      }
+      if (!reader) throw new Error("Kein Stream verfügbar");
 
       const decoder = new TextDecoder();
       let buffer = "";
@@ -227,11 +241,9 @@ export default function CheckPage() {
               setAnalysisEvents((prev) => [...prev, data]);
 
               if (data.type === "completed") {
-                setStep(3);
+                setStep(5);
                 setIsAnalyzing(false);
-                setTimeout(() => {
-                  router.push(`/results/${checkId}`);
-                }, 1500);
+                setTimeout(() => router.push(`/results/${checkId}`), 1500);
               }
 
               if (data.type === "error") {
@@ -239,7 +251,7 @@ export default function CheckPage() {
                 setError(data.message || "Analyse fehlgeschlagen");
               }
             } catch {
-              // Skip malformed SSE events
+              // Skip malformed SSE
             }
           }
         }
@@ -250,7 +262,16 @@ export default function CheckPage() {
       setIsAnalyzing(false);
       setError(err instanceof Error ? err.message : "Analyse fehlgeschlagen");
     }
-  }, [formData, uploadedDocs, checkId, router]);
+  }, [formData, checkId, router]);
+
+  const handleUploadMore = useCallback(() => {
+    setStep(1);
+    setClassificationLog([]);
+    setPendingExtractions([]);
+  }, []);
+
+  // Map step to progress bar step (progress bar has 4 steps)
+  const progressStep = step <= 2 ? 1 : step === 3 ? 2 : step === 4 ? 2 : step === 5 ? 3 : 1;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
@@ -258,7 +279,7 @@ export default function CheckPage() {
         Frachtführer-Check
       </h1>
 
-      <ProgressBar currentStep={step} />
+      <ProgressBar currentStep={progressStep} />
 
       {error && (
         <div className="rounded-lg border border-ec-error/20 bg-ec-error/5 px-4 py-3 text-sm text-ec-error">
@@ -266,7 +287,7 @@ export default function CheckPage() {
         </div>
       )}
 
-      {/* Step 1: Upload & Carrier Info */}
+      {/* Step 1: Upload documents */}
       {step === 1 && (
         <div className="space-y-6">
           <Card>
@@ -282,72 +303,123 @@ export default function CheckPage() {
               <div className="space-y-4">
                 <FileDropzone
                   onFilesSelected={handleFilesSelected}
-                  disabled={isUploading || isClassifying}
+                  disabled={isUploading}
                 />
                 {isUploading && (
-                  <p className="text-sm text-ec-grey-70">
-                    Dateien werden hochgeladen...
-                  </p>
-                )}
-                {isClassifying && (
                   <div className="flex items-center gap-2 text-sm text-ec-info">
                     <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-info border-t-transparent" />
-                    Dokument wird von der KI analysiert...
+                    Dateien werden hochgeladen...
                   </div>
                 )}
-                <DocumentList documents={uploadedDocs} />
+                {uploadedDocs.length > 0 && <DocumentList documents={uploadedDocs} />}
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
 
-          {/* Extraction preview — shown when AI extracted data from a document */}
-          {pendingExtraction && (
+      {/* Step 2: AI is classifying — user waits */}
+      {step === 2 && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-ec-dark-blue">
+              KI-Analyse läuft
+            </h2>
+            <p className="mt-1 text-sm text-ec-grey-70">
+              Die hochgeladenen Dokumente werden analysiert. Bitte warten...
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {classificationLog.map((msg, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm">
+                  {i === classificationLog.length - 1 && (
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-dark-blue border-t-transparent" />
+                  )}
+                  {i < classificationLog.length - 1 && (
+                    <span className="text-ec-success">✓</span>
+                  )}
+                  <span className="text-ec-grey-80">{msg}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 3: Extraction results — user reviews and edits */}
+      {step === 3 && (
+        <div className="space-y-6">
+          {/* Classification summary */}
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold text-ec-dark-blue">
+                Analyse abgeschlossen
+              </h2>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {classificationLog.map((msg, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <span className="text-ec-success">✓</span>
+                    <span className="text-ec-grey-80">{msg}</span>
+                  </div>
+                ))}
+              </div>
+              <DocumentList documents={uploadedDocs} />
+            </CardContent>
+          </Card>
+
+          {/* Pending extractions to review */}
+          {pendingExtractions.length > 0 && (
             <ExtractionPreview
-              documentType={pendingExtraction.documentType}
-              documentTypeLabelDe={pendingExtraction.documentTypeLabelDe}
-              extractedData={pendingExtraction.extractedData}
+              documentType={pendingExtractions[0].documentType}
+              documentTypeLabelDe={pendingExtractions[0].documentTypeLabelDe}
+              extractedData={pendingExtractions[0].extractedData}
               onAccept={handleAcceptExtraction}
               onDismiss={handleDismissExtraction}
             />
           )}
 
+          {/* Carrier form for review/edit */}
           <Card>
             <CardHeader>
               <h2 className="text-lg font-semibold text-ec-dark-blue">
-                Frachtführer-Informationen
+                Daten prüfen und ergänzen
               </h2>
               <p className="mt-1 text-sm text-ec-grey-70">
-                Felder können manuell ausgefüllt oder automatisch aus den Dokumenten übernommen werden.
+                Prüfen Sie die extrahierten Daten und ergänzen oder korrigieren Sie diese bei Bedarf.
               </p>
             </CardHeader>
             <CardContent>
               <CarrierForm
                 data={formData}
                 onChange={handleFormChange}
-                disabled={isUploading || isClassifying}
               />
             </CardContent>
           </Card>
 
-          <div className="flex justify-end">
-            <Button
-              onClick={handleStartAnalysis}
-              disabled={isUploading || isClassifying || uploadedDocs.length === 0}
-              size="lg"
-            >
-              Analyse starten
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" onClick={handleUploadMore}>
+              Weitere Dokumente hochladen
+            </Button>
+            <Button onClick={handleStartFullAnalysis} size="lg">
+              Vollständige Analyse starten
             </Button>
           </div>
         </div>
       )}
 
-      {/* Step 2: Analysis Running */}
-      {step === 2 && (
+      {/* Step 4: Full analysis running */}
+      {step === 4 && (
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold text-ec-dark-blue">
-              Analyse läuft
+              Vollständige Analyse läuft
             </h2>
+            <p className="mt-1 text-sm text-ec-grey-70">
+              Risikobewertung und dokumentübergreifende Prüfung werden durchgeführt...
+            </p>
           </CardHeader>
           <CardContent>
             <AnalysisStream events={analysisEvents} isAnalyzing={isAnalyzing} />
@@ -355,8 +427,8 @@ export default function CheckPage() {
         </Card>
       )}
 
-      {/* Step 3: Completed — redirecting */}
-      {step === 3 && (
+      {/* Step 5: Complete — redirecting */}
+      {step === 5 && (
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold text-ec-dark-blue">
@@ -366,8 +438,8 @@ export default function CheckPage() {
           <CardContent>
             <div className="space-y-4">
               <AnalysisStream events={analysisEvents} isAnalyzing={false} />
-              <p className="text-sm text-ec-grey-70">
-                Weiterleitung zum Ergebnis...
+              <p className="text-sm font-medium text-ec-success">
+                ✓ Weiterleitung zum Ergebnis...
               </p>
             </div>
           </CardContent>

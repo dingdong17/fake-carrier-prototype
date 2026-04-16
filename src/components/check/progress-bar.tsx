@@ -3,10 +3,10 @@ interface ProgressBarProps {
 }
 
 const steps = [
-  { number: 1, label: "Dokumente hochladen" },
-  { number: 2, label: "Analyse läuft" },
-  { number: 3, label: "Ergebnis & Empfehlung" },
-  { number: 4, label: "Bericht" },
+  { number: 1, label: "Hochladen & Erkennung" },
+  { number: 2, label: "Daten prüfen" },
+  { number: 3, label: "Vollanalyse" },
+  { number: 4, label: "Ergebnis" },
 ];
 
 export function ProgressBar({ currentStep }: ProgressBarProps) {
