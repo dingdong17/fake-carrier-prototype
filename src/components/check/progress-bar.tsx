@@ -3,9 +3,9 @@ interface ProgressBarProps {
 }
 
 const steps = [
-  { number: 1, label: "Hochladen & Erkennung" },
+  { number: 1, label: "Dokumente hochladen" },
   { number: 2, label: "Daten prüfen" },
-  { number: 3, label: "Vollanalyse" },
+  { number: 3, label: "Analyse" },
   { number: 4, label: "Ergebnis" },
 ];
 

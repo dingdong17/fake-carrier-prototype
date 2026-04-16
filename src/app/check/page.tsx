@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ProgressBar } from "@/components/check/progress-bar";
 import { FileDropzone } from "@/components/check/file-dropzone";
@@ -40,16 +40,16 @@ export default function CheckPage() {
   const router = useRouter();
 
   // Flow steps:
-  // 1 = initial (show dropzone)
-  // 2 = AI is classifying/extracting uploaded documents
-  // 3 = extraction results shown, user reviews form data
-  // 4 = full analysis running (risk scoring, cross-check)
-  // 5 = analysis complete, redirecting to results
+  // 1 = upload documents (user stays here, uploads multiple docs, sees checklist fill up)
+  // 2 = review extracted data & carrier form
+  // 3 = full analysis running (risk scoring, cross-check)
+  // 4 = analysis complete, redirecting to results
   const [step, setStep] = useState(1);
   const [checkId, setCheckId] = useState<string | null>(null);
   const [formData, setFormData] = useState<CarrierFormData>(INITIAL_FORM);
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isClassifying, setIsClassifying] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisEvents, setAnalysisEvents] = useState<AnalysisEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +65,9 @@ export default function CheckPage() {
     { id: "driver-vehicle", labelDe: "Fahrer- & Fahrzeugdaten vorhanden", checked: false, autoDetected: false },
   ]);
 
+  const allChecked = useMemo(() => checklist.every((item) => item.checked), [checklist]);
+  const hasAnyDoc = uploadedDocs.length > 0;
+
   const handleFormChange = useCallback(
     (field: keyof CarrierFormData, value: string) => {
       setFormData((prev) => ({ ...prev, [field]: value }));
@@ -78,7 +81,6 @@ export default function CheckPage() {
       setIsUploading(true);
 
       try {
-        // Step 1: Upload files
         const formDataUpload = new FormData();
         for (const file of files) {
           formDataUpload.append("files", file);
@@ -103,14 +105,11 @@ export default function CheckPage() {
         setUploadedDocs((prev) => [...prev, ...newDocs]);
         setIsUploading(false);
 
-        // Step 2: Immediately start AI classification & extraction
-        setStep(2);
-        const log: string[] = [];
-        const extractions: PendingExtraction[] = [];
+        // Classify each document inline (stay on step 1)
+        setIsClassifying(true);
 
         for (const doc of newDocs) {
-          log.push(`Analysiere "${doc.fileName}"...`);
-          setClassificationLog([...log]);
+          setClassificationLog((prev) => [...prev, `Analysiere "${doc.fileName}"...`]);
 
           try {
             const classifyRes = await fetch("/api/classify", {
@@ -138,9 +137,9 @@ export default function CheckPage() {
               );
 
               if (classifyData.documentType !== "unknown") {
-                log.push(`"${doc.fileName}" erkannt als: ${typeName}`);
+                setClassificationLog((prev) => [...prev, `"${doc.fileName}" erkannt als: ${typeName}`]);
 
-                // Tick the checklist for the detected document type
+                // Tick the checklist
                 setChecklist((prev) =>
                   prev.map((item) =>
                     item.id === classifyData.documentType
@@ -149,19 +148,16 @@ export default function CheckPage() {
                   )
                 );
               } else {
-                log.push(`"${doc.fileName}": Dokumenttyp konnte nicht bestimmt werden`);
+                setClassificationLog((prev) => [...prev, `"${doc.fileName}": Dokumenttyp konnte nicht bestimmt werden`]);
               }
-              setClassificationLog([...log]);
 
-              // Collect extractions for review
+              // Handle extractions
               if (classifyData.extractedData) {
-                log.push(`Daten aus ${typeName} extrahiert`);
-                setClassificationLog([...log]);
+                setClassificationLog((prev) => [...prev, `Daten aus ${typeName} extrahiert`]);
 
-                // Check if it's a Verkehrshaftungsversicherung
+                // Check Verkehrshaftung
                 if (classifyData.extractedData.isVerkehrshaftung === true) {
-                  log.push(`Verkehrshaftungsversicherung bestätigt`);
-                  setClassificationLog([...log]);
+                  setClassificationLog((prev) => [...prev, `Verkehrshaftungsversicherung bestätigt`]);
                   setChecklist((prev) =>
                     prev.map((item) =>
                       item.id === "is-verkehrshaftung"
@@ -171,28 +167,28 @@ export default function CheckPage() {
                   );
                 }
 
-                extractions.push({
-                  documentId: doc.id,
-                  documentType: classifyData.documentType,
-                  documentTypeLabelDe: typeName,
-                  extractedData: classifyData.extractedData,
-                });
+                setPendingExtractions((prev) => [
+                  ...prev,
+                  {
+                    documentId: doc.id,
+                    documentType: classifyData.documentType,
+                    documentTypeLabelDe: typeName,
+                    extractedData: classifyData.extractedData,
+                  },
+                ]);
               }
             } else {
-              log.push(`"${doc.fileName}": Klassifizierung fehlgeschlagen`);
-              setClassificationLog([...log]);
+              setClassificationLog((prev) => [...prev, `"${doc.fileName}": Klassifizierung fehlgeschlagen`]);
             }
           } catch {
-            log.push(`"${doc.fileName}": Fehler bei der Analyse`);
-            setClassificationLog([...log]);
+            setClassificationLog((prev) => [...prev, `"${doc.fileName}": Fehler bei der Analyse`]);
           }
         }
 
-        // Step 3: Show extraction results for user review
-        setPendingExtractions(extractions);
-        setStep(3);
+        setIsClassifying(false);
       } catch (err) {
         setIsUploading(false);
+        setIsClassifying(false);
         setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
       }
     },
@@ -210,7 +206,6 @@ export default function CheckPage() {
         }
         return updated;
       });
-      // Remove the accepted extraction from pending
       setPendingExtractions((prev) => prev.slice(1));
     },
     []
@@ -220,13 +215,21 @@ export default function CheckPage() {
     setPendingExtractions((prev) => prev.slice(1));
   }, []);
 
+  const handleProceedToReview = useCallback(() => {
+    setStep(2);
+  }, []);
+
+  const handleBackToUpload = useCallback(() => {
+    setStep(1);
+  }, []);
+
   const handleStartFullAnalysis = useCallback(async () => {
     if (!checkId) {
       setError("Kein Check vorhanden.");
       return;
     }
 
-    // Update carrier info on the check before full analysis
+    // Update carrier info before analysis
     if (formData.carrierName) {
       const updateForm = new FormData();
       updateForm.append("checkId", checkId);
@@ -238,7 +241,7 @@ export default function CheckPage() {
     }
 
     setError(null);
-    setStep(4);
+    setStep(3);
     setIsAnalyzing(true);
     setAnalysisEvents([]);
 
@@ -275,7 +278,7 @@ export default function CheckPage() {
               setAnalysisEvents((prev) => [...prev, data]);
 
               if (data.type === "completed") {
-                setStep(5);
+                setStep(4);
                 setIsAnalyzing(false);
                 setTimeout(() => router.push(`/results/${checkId}`), 1500);
               }
@@ -298,17 +301,11 @@ export default function CheckPage() {
     }
   }, [formData, checkId, router]);
 
-  const handleUploadMore = useCallback(() => {
-    setStep(1);
-    setClassificationLog([]);
-    setPendingExtractions([]);
-  }, []);
-
-  // Map step to progress bar step (progress bar has 4 steps)
-  const progressStep = step <= 2 ? 1 : step === 3 ? 2 : step === 4 ? 2 : step === 5 ? 3 : 1;
+  // Map step to progress bar (4 progress bar steps)
+  const progressStep = step === 1 ? 1 : step === 2 ? 2 : step === 3 ? 3 : step === 4 ? 4 : 1;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-6">
+    <div className="mx-auto max-w-5xl space-y-6 p-6">
       <h1 className="text-2xl font-bold text-ec-dark-blue">
         Frachtführer-Check
       </h1>
@@ -321,129 +318,144 @@ export default function CheckPage() {
         </div>
       )}
 
-      {/* Step 1: Upload documents */}
+      {/* Step 1: Upload documents — user stays here until they decide to proceed */}
       {step === 1 && (
-        <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold text-ec-dark-blue">
-                Dokumente hochladen
-              </h2>
-              <p className="mt-1 text-sm text-ec-grey-70">
-                Laden Sie die Dokumente des Frachtführers hoch. Die KI erkennt automatisch den Dokumenttyp und extrahiert relevante Daten.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <FileDropzone
-                  onFilesSelected={handleFilesSelected}
-                  disabled={isUploading}
-                />
-                {isUploading && (
-                  <div className="flex items-center gap-2 text-sm text-ec-info">
-                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-info border-t-transparent" />
-                    Dateien werden hochgeladen...
+        <div className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <h2 className="text-lg font-semibold text-ec-dark-blue">
+                    Dokumente hochladen
+                  </h2>
+                  <p className="mt-1 text-sm text-ec-grey-70">
+                    Laden Sie die Dokumente des Frachtführers hoch. Die KI erkennt automatisch den Dokumenttyp und extrahiert relevante Daten. Sie können mehrfach Dokumente hochladen.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <FileDropzone
+                      onFilesSelected={handleFilesSelected}
+                      disabled={isUploading || isClassifying}
+                    />
+                    {isUploading && (
+                      <div className="flex items-center gap-2 text-sm text-ec-info">
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-info border-t-transparent" />
+                        Dateien werden hochgeladen...
+                      </div>
+                    )}
+                    {isClassifying && (
+                      <div className="flex items-center gap-2 text-sm text-ec-dark-blue">
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-dark-blue border-t-transparent" />
+                        KI analysiert Dokument...
+                      </div>
+                    )}
                   </div>
-                )}
-                {uploadedDocs.length > 0 && <DocumentList documents={uploadedDocs} />}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="h-fit">
-            <DocumentChecklist items={checklist} />
-          </Card>
+                </CardContent>
+              </Card>
+
+              {/* Classification log */}
+              {classificationLog.length > 0 && (
+                <Card>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {classificationLog.map((msg, i) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <span className="text-ec-success">✓</span>
+                          <span className="text-ec-grey-80">{msg}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Document list */}
+              {uploadedDocs.length > 0 && (
+                <Card>
+                  <CardContent>
+                    <DocumentList documents={uploadedDocs} />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Pending extractions — shown inline on step 1 */}
+              {pendingExtractions.length > 0 && (
+                <ExtractionPreview
+                  documentType={pendingExtractions[0].documentType}
+                  documentTypeLabelDe={pendingExtractions[0].documentTypeLabelDe}
+                  extractedData={pendingExtractions[0].extractedData}
+                  onAccept={handleAcceptExtraction}
+                  onDismiss={handleDismissExtraction}
+                />
+              )}
+            </div>
+
+            {/* Checklist sidebar */}
+            <div className="space-y-4">
+              <Card className="h-fit">
+                <DocumentChecklist items={checklist} />
+              </Card>
+
+              {/* All checks green — congratulate and encourage to proceed */}
+              {allChecked && (
+                <Card className="border-ec-success/30 bg-ec-success/5">
+                  <div className="space-y-3 text-center">
+                    <div className="text-3xl">🎉</div>
+                    <p className="text-sm font-semibold text-ec-success">
+                      Hervorragend! Alle Dokumente liegen vor.
+                    </p>
+                    <p className="text-xs text-ec-grey-70">
+                      Sie haben eine optimale Grundlage für die Analyse geschaffen. Fahren Sie jetzt mit der Datenprüfung fort.
+                    </p>
+                    <Button onClick={handleProceedToReview} size="lg" className="w-full">
+                      Weiter zur Datenprüfung
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </div>
+          </div>
+
+          {/* Proceed button — always available once at least one doc is uploaded */}
+          {hasAnyDoc && !isClassifying && !allChecked && (
+            <div className="flex justify-end">
+              <Button onClick={handleProceedToReview} variant={allChecked ? "primary" : "outline"}>
+                Weiter zur Datenprüfung
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Step 2: AI is classifying — user waits */}
+      {/* Step 2: Review extracted data & carrier form */}
       {step === 2 && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-semibold text-ec-dark-blue">
-              KI-Analyse läuft
-            </h2>
-            <p className="mt-1 text-sm text-ec-grey-70">
-              Die hochgeladenen Dokumente werden analysiert. Bitte warten...
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {classificationLog.map((msg, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm">
-                  {i === classificationLog.length - 1 && (
-                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-dark-blue border-t-transparent" />
-                  )}
-                  {i < classificationLog.length - 1 && (
-                    <span className="text-ec-success">✓</span>
-                  )}
-                  <span className="text-ec-grey-80">{msg}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 3: Extraction results — user reviews and edits */}
-      {step === 3 && (
         <div className="space-y-6">
-          {/* Checklist + Classification summary */}
           <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold text-ec-dark-blue">
-                Analyse abgeschlossen
-              </h2>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {classificationLog.map((msg, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm">
-                    <span className="text-ec-success">✓</span>
-                    <span className="text-ec-grey-80">{msg}</span>
-                  </div>
-                ))}
-              </div>
-              <DocumentList documents={uploadedDocs} />
-            </CardContent>
-          </Card>
-          <Card className="h-fit">
-            <DocumentChecklist items={checklist} />
-          </Card>
+            <Card>
+              <CardHeader>
+                <h2 className="text-lg font-semibold text-ec-dark-blue">
+                  Daten prüfen und ergänzen
+                </h2>
+                <p className="mt-1 text-sm text-ec-grey-70">
+                  Prüfen Sie die extrahierten Daten und ergänzen oder korrigieren Sie diese bei Bedarf.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <CarrierForm
+                  data={formData}
+                  onChange={handleFormChange}
+                />
+              </CardContent>
+            </Card>
+            <Card className="h-fit">
+              <DocumentChecklist items={checklist} />
+            </Card>
           </div>
 
-          {/* Pending extractions to review */}
-          {pendingExtractions.length > 0 && (
-            <ExtractionPreview
-              documentType={pendingExtractions[0].documentType}
-              documentTypeLabelDe={pendingExtractions[0].documentTypeLabelDe}
-              extractedData={pendingExtractions[0].extractedData}
-              onAccept={handleAcceptExtraction}
-              onDismiss={handleDismissExtraction}
-            />
-          )}
-
-          {/* Carrier form for review/edit */}
-          <Card>
-            <CardHeader>
-              <h2 className="text-lg font-semibold text-ec-dark-blue">
-                Daten prüfen und ergänzen
-              </h2>
-              <p className="mt-1 text-sm text-ec-grey-70">
-                Prüfen Sie die extrahierten Daten und ergänzen oder korrigieren Sie diese bei Bedarf.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <CarrierForm
-                data={formData}
-                onChange={handleFormChange}
-              />
-            </CardContent>
-          </Card>
-
           <div className="flex items-center justify-between">
-            <Button variant="ghost" onClick={handleUploadMore}>
-              Weitere Dokumente hochladen
+            <Button variant="ghost" onClick={handleBackToUpload}>
+              Zurück — weitere Dokumente hochladen
             </Button>
             <Button onClick={handleStartFullAnalysis} size="lg">
               Vollständige Analyse starten
@@ -452,8 +464,8 @@ export default function CheckPage() {
         </div>
       )}
 
-      {/* Step 4: Full analysis running */}
-      {step === 4 && (
+      {/* Step 3: Full analysis running */}
+      {step === 3 && (
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold text-ec-dark-blue">
@@ -469,8 +481,8 @@ export default function CheckPage() {
         </Card>
       )}
 
-      {/* Step 5: Complete — redirecting */}
-      {step === 5 && (
+      {/* Step 4: Complete — redirecting */}
+      {step === 4 && (
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold text-ec-dark-blue">
