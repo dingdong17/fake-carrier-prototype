@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 
 interface KanbanCardProps {
@@ -30,13 +33,23 @@ export function KanbanCard({
   onDragEnd,
   onClick,
 }: KanbanCardProps) {
+  const [dragging, setDragging] = useState(false);
+
   return (
     <div
       draggable
-      onDragStart={(e) => onDragStart(e, item.id)}
-      onDragEnd={() => onDragEnd?.()}
+      onDragStart={(e) => {
+        setDragging(true);
+        onDragStart(e, item.id);
+      }}
+      onDragEnd={() => {
+        setDragging(false);
+        onDragEnd?.();
+      }}
       onClick={() => onClick?.(item.id)}
-      className="cursor-grab rounded-lg border border-ec-medium-grey bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
+      className={`cursor-grab rounded-lg border border-ec-medium-grey bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${
+        dragging ? "opacity-50" : ""
+      }`}
     >
       <div className="mb-1.5 flex items-center justify-between">
         <span className="font-mono text-xs text-ec-grey-80">
