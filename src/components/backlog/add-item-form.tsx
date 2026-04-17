@@ -2,23 +2,38 @@
 
 import { useState } from "react";
 
-interface AddItemFormProps {
-  onAdd: (title: string, priority: string, description: string) => void;
+interface EpicOption {
+  id: string;
+  itemNumber: string;
+  title: string;
 }
 
-export function AddItemForm({ onAdd }: AddItemFormProps) {
+interface AddItemFormProps {
+  epics: EpicOption[];
+  defaultEpicId: string;
+  onAdd: (
+    title: string,
+    priority: string,
+    description: string,
+    epicId: string,
+  ) => void;
+}
+
+export function AddItemForm({ epics, defaultEpicId, onAdd }: AddItemFormProps) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
+  const [epicId, setEpicId] = useState(defaultEpicId);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
-    onAdd(title.trim(), priority, description.trim());
+    if (!title.trim() || !epicId) return;
+    onAdd(title.trim(), priority, description.trim(), epicId);
     setTitle("");
     setDescription("");
     setPriority("medium");
+    setEpicId(defaultEpicId);
     setOpen(false);
   }
 
@@ -39,6 +54,17 @@ export function AddItemForm({ onAdd }: AddItemFormProps) {
       className="rounded-xl border border-ec-medium-grey bg-white p-4 shadow-sm"
     >
       <div className="space-y-3">
+        <select
+          value={epicId}
+          onChange={(e) => setEpicId(e.target.value)}
+          className="w-full rounded-lg border border-ec-medium-grey px-3 py-2 text-sm text-ec-dark-blue focus:border-ec-dark-blue focus:outline-none focus:ring-1 focus:ring-ec-dark-blue"
+        >
+          {epics.map((ep) => (
+            <option key={ep.id} value={ep.id}>
+              {ep.itemNumber} · {ep.title}
+            </option>
+          ))}
+        </select>
         <input
           type="text"
           placeholder="Titel"
