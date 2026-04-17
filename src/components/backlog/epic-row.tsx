@@ -66,7 +66,7 @@ export function EpicRow({
         <span className="font-mono text-xs text-ec-grey-80">{row.epic.itemNumber}</span>
         {isOrphans && (
           <span className="rounded-full bg-ec-medium-grey px-2 py-0.5 text-[9px] uppercase tracking-wide text-ec-grey-80">
-            Geschützt
+            Protected
           </span>
         )}
         <button

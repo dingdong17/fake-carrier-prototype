@@ -261,7 +261,7 @@ export function ManageEpicsModal({ open, onClose, onDirty }: ManageEpicsModalPro
                     <div className="flex gap-2">
                       {epic.isProtected === 1 ? (
                         <span className="text-[10px] uppercase tracking-wide text-ec-grey-80">
-                          Geschützt
+                          Protected
                         </span>
                       ) : (
                         <>
