@@ -61,9 +61,13 @@ function BacklogPageInner() {
     fetchEpics();
   }, [fetchItems, fetchEpics]);
 
-  // Apply URL ?epic= once epics load.
+  // Apply URL ?epic= once per param change (NOT on every epics refetch).
+  const appliedEpicParam = useRef<string | null>(null);
   useEffect(() => {
     if (epics.length === 0) return;
+    if (appliedEpicParam.current === epicParam) return;
+    appliedEpicParam.current = epicParam;
+
     if (epicParam === "all") {
       setCollapsedIds(new Set());
       return;
@@ -138,7 +142,7 @@ function BacklogPageInner() {
     if (!item) return;
     if (item.epicId === targetEpicId && item.status === targetStatus) return;
 
-    const snapshot = items;
+    const original = item;
     setItems((prev) =>
       prev.map((i) =>
         i.id === id ? { ...i, epicId: targetEpicId, status: targetStatus } : i,
@@ -156,7 +160,7 @@ function BacklogPageInner() {
       }),
     });
     if (!res.ok) {
-      setItems(snapshot);
+      setItems((prev) => prev.map((i) => (i.id === id ? original : i)));
       const err = await res.json().catch(() => ({ error: "Fehler" }));
       alert(err.error ?? "Fehler");
       return;
@@ -196,7 +200,8 @@ function BacklogPageInner() {
     priority: string;
     epicId: string;
   }) {
-    const snapshot = items;
+    const original = items.find((i) => i.id === updates.id);
+    if (!original) return;
     setItems((prev) =>
       prev.map((i) =>
         i.id === updates.id
@@ -217,7 +222,7 @@ function BacklogPageInner() {
       body: JSON.stringify({ action: "update", ...updates }),
     });
     if (!res.ok) {
-      setItems(snapshot);
+      setItems((prev) => prev.map((i) => (i.id === updates.id ? original : i)));
       const err = await res.json().catch(() => ({ error: "Fehler" }));
       alert(err.error ?? "Fehler");
       return;
@@ -260,7 +265,7 @@ function BacklogPageInner() {
             onClick={openGlobalAddDialog}
             className="rounded-lg bg-ec-dark-blue px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-ec-light-blue"
           >
-            + Neues Eintrag
+            + Neuer Eintrag
           </button>
         </div>
       </div>
@@ -298,11 +303,7 @@ function BacklogPageInner() {
 
       <ManageEpicsModal
         open={manageOpen}
-        onClose={() => {
-          setManageOpen(false);
-          fetchEpics();
-          fetchItems();
-        }}
+        onClose={() => setManageOpen(false)}
         onDirty={() => {
           fetchEpics();
           fetchItems();
