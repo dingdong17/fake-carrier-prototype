@@ -7,8 +7,7 @@ const links = [
   { href: "/", label: "Start" },
   { href: "/check", label: "Neue Prüfung" },
   { href: "/history", label: "Verlauf" },
-  { href: "/backlog", label: "Backlog" },
-  { href: "/backlog/epics", label: "Epics" },
+  { href: "/backlog", label: "Dev ToDos" },
   { href: "/feedback", label: "Feedback" },
 ];
 
@@ -21,9 +20,7 @@ export function NavLinks() {
         const isActive =
           link.href === "/"
             ? pathname === "/"
-            : link.href === "/backlog"
-              ? pathname === "/backlog"
-              : pathname.startsWith(link.href);
+            : pathname.startsWith(link.href);
         return (
           <Link
             key={link.href}
