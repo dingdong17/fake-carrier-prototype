@@ -774,22 +774,34 @@ export function EpicRow({
   const pct =
     row.total === 0 ? 0 : Math.round((row.counts.done / row.total) * 100);
 
+  const isOrphans = row.epic.isProtected === 1;
   const header = (
-    <div className="flex flex-col justify-between gap-1 rounded-lg border border-ec-medium-grey bg-white p-3">
+    <div
+      className={`flex flex-col justify-between gap-1 rounded-lg border p-3 ${
+        isOrphans
+          ? "border-ec-grey-60 bg-ec-light-grey"
+          : "border-ec-medium-grey bg-white"
+      }`}
+    >
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => onToggleCollapse(row.epic.id)}
-          className="rounded px-1 text-ec-grey-80 hover:bg-ec-light-grey"
+          className="rounded px-1 text-ec-grey-80 hover:bg-ec-medium-grey"
           aria-label={collapsed ? "Aufklappen" : "Zuklappen"}
         >
           {collapsed ? "▸" : "▾"}
         </button>
         <span className="font-mono text-xs text-ec-grey-80">{row.epic.itemNumber}</span>
+        {isOrphans && (
+          <span className="rounded-full bg-ec-medium-grey px-2 py-0.5 text-[9px] uppercase tracking-wide text-ec-grey-80">
+            Geschützt
+          </span>
+        )}
         <button
           type="button"
           onClick={() => onAddItem(row.epic.id)}
-          className="ml-auto rounded px-1 text-xs text-ec-dark-blue hover:bg-ec-light-grey"
+          className="ml-auto rounded px-1 text-xs text-ec-dark-blue hover:bg-ec-medium-grey"
           aria-label="Eintrag hinzufügen"
         >
           +
