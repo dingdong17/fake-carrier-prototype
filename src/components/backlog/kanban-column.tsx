@@ -6,6 +6,7 @@ interface ColumnItem {
   title: string;
   description: string | null;
   priority: "critical" | "high" | "medium" | "low";
+  epic?: { itemNumber: string; title: string } | null;
 }
 
 interface KanbanColumnProps {
@@ -14,6 +15,7 @@ interface KanbanColumnProps {
   items: ColumnItem[];
   onDragStart: (e: React.DragEvent, id: string) => void;
   onDrop: (e: React.DragEvent, status: string) => void;
+  onCardClick?: (id: string) => void;
 }
 
 export function KanbanColumn({
@@ -22,6 +24,7 @@ export function KanbanColumn({
   items,
   onDragStart,
   onDrop,
+  onCardClick,
 }: KanbanColumnProps) {
   return (
     <div
@@ -39,7 +42,13 @@ export function KanbanColumn({
       </div>
       <div className="flex min-h-[200px] flex-col gap-2">
         {items.map((item) => (
-          <KanbanCard key={item.id} item={item} onDragStart={onDragStart} />
+          <KanbanCard
+            key={item.id}
+            item={item}
+            epic={item.epic}
+            onDragStart={onDragStart}
+            onClick={onCardClick}
+          />
         ))}
       </div>
     </div>

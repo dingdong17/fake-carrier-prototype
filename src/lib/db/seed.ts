@@ -1,8 +1,10 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { eq, sql } from "drizzle-orm";
 import * as schema from "./schema";
-import { backlogItems } from "./schema";
+import { backlogItems, epics } from "./schema";
 import { generateId, formatBacklogNumber } from "../utils";
+import { ensureOrphansEpic, createEpic } from "./epics";
 import { existsSync, mkdirSync } from "fs";
 import path from "path";
 
@@ -22,6 +24,51 @@ const SEED_ITEMS = [
   { title: "Fahrzeug-Fotoanalyse (vehicle photo analysis)", priority: "low" as const, description: "Use Claude vision to analyze vehicle photos for plausibility." },
   { title: "Graph-based pattern analysis", priority: "low" as const, description: "Cross-check carriers against a relationship graph of known entities." },
   { title: "Agent-to-Agent cooperation", priority: "low" as const, description: "Compliance agent, legal agent, etc. working together on complex cases." },
+];
+
+const EPIC_DEFINITIONS = [
+  {
+    title: "External Registries",
+    description: "VAT and transport-license registry integrations across EU.",
+    priority: "high" as const,
+    titleMatchers: ["VIES", "KREPTD", "BALM", "KRS, CEIDG, ONRC"],
+  },
+  {
+    title: "Deployment & Hosting",
+    description: "Moving off local SQLite to a managed hosting target.",
+    priority: "medium" as const,
+    titleMatchers: ["Vercel + Turso", "Azure data persistence"],
+  },
+  {
+    title: "Monetization & Access",
+    description: "Authentication, multi-tenancy, billing.",
+    priority: "medium" as const,
+    titleMatchers: ["MS Entra", "Multi-tenant client"],
+  },
+  {
+    title: "Integrations",
+    description: "Third-party feeds that accelerate carrier verification.",
+    priority: "medium" as const,
+    titleMatchers: ["TIMOCOM", "Blacklist database"],
+  },
+  {
+    title: "Advanced Detection",
+    description: "Next-generation signals beyond document and registry checks.",
+    priority: "low" as const,
+    titleMatchers: ["Fahrzeug-Fotoanalyse", "Graph-based pattern analysis", "Agent-to-Agent"],
+  },
+  {
+    title: "Rebrand",
+    description: "Visual identity migration from Ecclesia to SCHUNCK.",
+    priority: "medium" as const,
+    titleMatchers: ["Rebrand to SCHUNCK"],
+  },
+  {
+    title: "Feedback Loop",
+    description: "User feedback collection and triage.",
+    priority: "high" as const,
+    titleMatchers: ["User feedback collection"],
+  },
 ];
 
 async function seed() {
@@ -73,6 +120,18 @@ async function seed() {
       metadata TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS epics (
+      id TEXT PRIMARY KEY,
+      item_number TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      description TEXT,
+      priority TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'backlog',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_protected INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS backlog_items (
       id TEXT PRIMARY KEY,
       item_number TEXT NOT NULL UNIQUE,
@@ -94,30 +153,76 @@ async function seed() {
     );
   `);
 
-  // Check if backlog already seeded
-  const existing = db.select().from(backlogItems).all();
-  if (existing.length > 0) {
-    console.log("Backlog already seeded, skipping.");
-    return;
+  // Idempotent: add epic_id column to backlog_items if missing.
+  const cols = sqlite.prepare(`PRAGMA table_info(backlog_items)`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === "epic_id")) {
+    sqlite.exec(`ALTER TABLE backlog_items ADD COLUMN epic_id TEXT`);
   }
 
-  const now = new Date().toISOString();
-  for (let i = 0; i < SEED_ITEMS.length; i++) {
-    const item = SEED_ITEMS[i];
-    db.insert(backlogItems).values({
-      id: generateId(),
-      itemNumber: formatBacklogNumber(i + 1),
-      title: item.title,
-      description: item.description,
-      priority: item.priority,
-      status: "backlog",
-      sortOrder: i,
-      createdAt: now,
-      updatedAt: now,
-    }).run();
+  // Ensure Orphans exists.
+  const orphans = ensureOrphansEpic(db);
+
+  // Backfill any items without an epic to Orphans.
+  sqlite
+    .prepare(`UPDATE backlog_items SET epic_id = ?, updated_at = ? WHERE epic_id IS NULL OR epic_id = ''`)
+    .run(orphans.id, new Date().toISOString());
+
+  // Seed items if empty.
+  const existingItems = db.select().from(backlogItems).all();
+  if (existingItems.length === 0) {
+    const now = new Date().toISOString();
+    for (let i = 0; i < SEED_ITEMS.length; i++) {
+      const item = SEED_ITEMS[i];
+      db.insert(backlogItems).values({
+        id: generateId(),
+        itemNumber: formatBacklogNumber(i + 1),
+        title: item.title,
+        description: item.description,
+        priority: item.priority,
+        status: "backlog",
+        sortOrder: i,
+        epicId: orphans.id,
+        createdAt: now,
+        updatedAt: now,
+      }).run();
+    }
+    console.log(`Seeded ${SEED_ITEMS.length} backlog items.`);
+  } else {
+    console.log("Backlog items already seeded, skipping item seed.");
   }
 
-  console.log(`Seeded ${SEED_ITEMS.length} backlog items.`);
+  // Seed 7 themed epics ONLY if no non-Orphan epics exist yet.
+  const nonOrphanCount = db
+    .select({ c: sql<number>`count(*)` })
+    .from(epics)
+    .where(eq(epics.isProtected, 0))
+    .get();
+  if ((nonOrphanCount?.c ?? 0) === 0) {
+    for (const def of EPIC_DEFINITIONS) {
+      const epic = createEpic(db, {
+        title: def.title,
+        description: def.description,
+        priority: def.priority,
+      });
+      // Assign matching items.
+      for (const matcher of def.titleMatchers) {
+        const matches = db
+          .select()
+          .from(backlogItems)
+          .where(sql`title LIKE ${"%" + matcher + "%"}`)
+          .all();
+        for (const row of matches) {
+          db.update(backlogItems)
+            .set({ epicId: epic.id, updatedAt: new Date().toISOString() })
+            .where(eq(backlogItems.id, row.id))
+            .run();
+        }
+      }
+    }
+    console.log(`Seeded ${EPIC_DEFINITIONS.length} epics and reassigned matching items.`);
+  } else {
+    console.log("Epics already seeded, skipping epic seed.");
+  }
 }
 
 seed();

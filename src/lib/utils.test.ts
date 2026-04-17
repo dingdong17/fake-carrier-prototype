@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateId, formatCheckNumber, formatBacklogNumber, formatDate } from "./utils";
+import { generateId, formatCheckNumber, formatBacklogNumber, formatEpicNumber, formatDate } from "./utils";
 
 describe("generateId", () => {
   it("returns a valid UUID v4 string", () => {
@@ -48,6 +48,20 @@ describe("formatBacklogNumber", () => {
 
   it("handles four digits", () => {
     expect(formatBacklogNumber(1000)).toBe("BL-1000");
+  });
+});
+
+describe("formatEpicNumber", () => {
+  it("pads single digit", () => {
+    expect(formatEpicNumber(1)).toBe("EPIC-001");
+  });
+
+  it("pads double digit", () => {
+    expect(formatEpicNumber(15)).toBe("EPIC-015");
+  });
+
+  it("handles four digits", () => {
+    expect(formatEpicNumber(1000)).toBe("EPIC-1000");
   });
 });
 

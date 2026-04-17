@@ -61,6 +61,29 @@ export const chatMessages = sqliteTable("chat_messages", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+export const epics = sqliteTable("epics", {
+  id: text("id").primaryKey(),
+  itemNumber: text("item_number").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description"),
+  priority: text("priority", {
+    enum: ["critical", "high", "medium", "low"],
+  }).notNull(),
+  status: text("status", {
+    enum: ["backlog", "in_progress", "done"],
+  })
+    .notNull()
+    .default("backlog"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isProtected: integer("is_protected").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  updatedAt: text("updated_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
 export const backlogItems = sqliteTable("backlog_items", {
   id: text("id").primaryKey(),
   itemNumber: text("item_number").notNull().unique(),
@@ -75,6 +98,9 @@ export const backlogItems = sqliteTable("backlog_items", {
     .notNull()
     .default("backlog"),
   sortOrder: integer("sort_order").notNull().default(0),
+  epicId: text("epic_id")
+    .notNull()
+    .references(() => epics.id),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
@@ -101,6 +127,8 @@ export type NewCheck = typeof checks.$inferInsert;
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+export type Epic = typeof epics.$inferSelect;
+export type NewEpic = typeof epics.$inferInsert;
 export type BacklogItem = typeof backlogItems.$inferSelect;
 export type NewBacklogItem = typeof backlogItems.$inferInsert;
 export type Feedback = typeof feedback.$inferSelect;

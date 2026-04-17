@@ -12,6 +12,10 @@ export function formatBacklogNumber(seq: number): string {
   return `BL-${String(seq).padStart(3, "0")}`;
 }
 
+export function formatEpicNumber(seq: number): string {
+  return `EPIC-${String(seq).padStart(3, "0")}`;
+}
+
 export function formatDate(date: Date): string {
   return date.toLocaleDateString("de-DE", {
     year: "numeric",
