@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface EpicOption {
   id: string;
@@ -25,6 +25,12 @@ export function AddItemForm({ epics, defaultEpicId, onAdd }: AddItemFormProps) {
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
   const [epicId, setEpicId] = useState(defaultEpicId);
+
+  useEffect(() => {
+    if (defaultEpicId && !epicId) {
+      setEpicId(defaultEpicId);
+    }
+  }, [defaultEpicId, epicId]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

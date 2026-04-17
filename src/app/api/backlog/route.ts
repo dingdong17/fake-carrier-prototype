@@ -57,7 +57,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unbekannte Aktion" }, { status: 400 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Interner Fehler";
-    const status = message.includes("nicht gefunden") ? 400 : 500;
+    const status =
+      message.includes("nicht gelöscht") ||
+      message.includes("nicht bearbeitet") ||
+      message.includes("nicht gefunden")
+        ? 400
+        : 500;
     return NextResponse.json({ error: message }, { status });
   }
 }
