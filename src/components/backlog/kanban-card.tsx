@@ -9,7 +9,9 @@ interface KanbanCardProps {
     priority: "critical" | "high" | "medium" | "low";
   };
   epic?: { itemNumber: string; title: string } | null;
+  hideEpicChip?: boolean;
   onDragStart: (e: React.DragEvent, id: string) => void;
+  onDragEnd?: () => void;
   onClick?: (id: string) => void;
 }
 
@@ -20,11 +22,19 @@ const priorityLabel: Record<string, string> = {
   low: "Niedrig",
 };
 
-export function KanbanCard({ item, epic, onDragStart, onClick }: KanbanCardProps) {
+export function KanbanCard({
+  item,
+  epic,
+  hideEpicChip,
+  onDragStart,
+  onDragEnd,
+  onClick,
+}: KanbanCardProps) {
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, item.id)}
+      onDragEnd={() => onDragEnd?.()}
       onClick={() => onClick?.(item.id)}
       className="cursor-grab rounded-lg border border-ec-medium-grey bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
     >
@@ -37,7 +47,7 @@ export function KanbanCard({ item, epic, onDragStart, onClick }: KanbanCardProps
         </Badge>
       </div>
       <p className="text-sm font-medium text-ec-dark-blue">{item.title}</p>
-      {epic && (
+      {!hideEpicChip && epic && (
         <p className="mt-1 font-mono text-[10px] uppercase tracking-wide text-ec-grey-80">
           {epic.itemNumber} · {epic.title}
         </p>
