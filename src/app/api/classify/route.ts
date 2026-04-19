@@ -4,16 +4,7 @@ import { documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { classifyDocument } from "@/lib/analysis/providers/azure-document";
 import { analyzeDocumentWithForensics } from "@/lib/analysis/pipeline";
-import { appendFileSync, mkdirSync, existsSync } from "fs";
-import path from "path";
-
-function logAnalytics(message: string) {
-  const logDir = path.join(process.cwd(), "logs");
-  if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
-  const logPath = path.join(logDir, "analytics.log");
-  const timestamp = new Date().toISOString();
-  appendFileSync(logPath, `${timestamp} | ${message}\n`);
-}
+import { logEvent } from "@/lib/analytics";
 
 export async function POST(request: NextRequest) {
   const requestStart = Date.now();
@@ -41,28 +32,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    logAnalytics(`START classify | file=${doc.fileName} | docId=${documentId}`);
+    await logEvent("classify.start", {
+      documentId,
+      meta: { fileName: doc.fileName },
+    });
 
-    // Step 1: Classify the document
     const classification = await classifyDocument(doc.filePath, doc.mimeType);
     const classifyMs = classification.timing.totalMs;
 
-    logAnalytics(`CLASSIFY done | file=${doc.fileName} | type=${classification.documentType} | ${classification.timing.fileSizeKB}KB | classifyApi=${classification.timing.apiCallMs}ms | total=${classifyMs}ms`);
+    await logEvent("classify.done", {
+      documentId,
+      durationMs: classifyMs,
+      meta: {
+        fileName: doc.fileName,
+        documentType: classification.documentType,
+        fileSizeKB: classification.timing.fileSizeKB,
+        apiCallMs: classification.timing.apiCallMs,
+      },
+    });
 
-    // Update document type in DB
     await db.update(documents)
       .set({ documentType: classification.documentType })
       .where(eq(documents.id, documentId))
       .run();
 
-    // Step 2: Extract fields from recognized document types
     let extractedData: Record<string, unknown> | null = null;
     let extractMs = 0;
 
     if (classification.documentType !== "unknown") {
       const extractStart = Date.now();
 
-      logAnalytics(`EXTRACT start | file=${doc.fileName} | type=${classification.documentType} | ${classification.timing.fileSizeKB}KB`);
+      await logEvent("extract.start", {
+        documentId,
+        meta: {
+          fileName: doc.fileName,
+          documentType: classification.documentType,
+          fileSizeKB: classification.timing.fileSizeKB,
+        },
+      });
 
       const result = await analyzeDocumentWithForensics(
         doc.filePath,
@@ -76,9 +83,16 @@ export async function POST(request: NextRequest) {
       const fieldCount = Object.keys(extractedData).length;
       const signalCount = result.extraction.riskSignals.length;
 
-      logAnalytics(`EXTRACT done | file=${doc.fileName} | fields=${fieldCount} | signals=${signalCount} | extractApi=${extractMs}ms`);
+      await logEvent("extract.done", {
+        documentId,
+        durationMs: extractMs,
+        meta: {
+          fileName: doc.fileName,
+          fieldCount,
+          signalCount,
+        },
+      });
 
-      // Save extraction to document record
       await db.update(documents)
         .set({
           extractedFields: extractedData as Record<string, unknown>,
@@ -91,7 +105,15 @@ export async function POST(request: NextRequest) {
     }
 
     const totalMs = Date.now() - requestStart;
-    logAnalytics(`COMPLETE | file=${doc.fileName} | classify=${classifyMs}ms | extract=${extractMs}ms | total=${totalMs}ms`);
+    await logEvent("classify.complete", {
+      documentId,
+      durationMs: totalMs,
+      meta: {
+        fileName: doc.fileName,
+        classifyMs,
+        extractMs,
+      },
+    });
 
     return NextResponse.json({
       documentId,
@@ -107,7 +129,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const totalMs = Date.now() - requestStart;
     const errMsg = error instanceof Error ? error.message : "Classification failed";
-    logAnalytics(`ERROR | ${errMsg} | elapsed=${totalMs}ms`);
+    await logEvent("classify.error", {
+      durationMs: totalMs,
+      meta: { error: errMsg },
+    });
 
     return NextResponse.json(
       { error: errMsg },
