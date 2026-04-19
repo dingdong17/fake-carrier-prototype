@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFileSync, mkdirSync, existsSync } from "fs";
 import path from "path";
 import { db } from "@/lib/db";
 import { documents, checks } from "@/lib/db/schema";
 import { generateId, formatCheckNumber } from "@/lib/utils";
 import { eq, sql } from "drizzle-orm";
+import { getStorage } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {
@@ -84,12 +84,6 @@ export async function POST(request: NextRequest) {
         .run();
     }
 
-    // Ensure uploads directory exists
-    const uploadDir = path.join(process.cwd(), "uploads", resolvedCheckId);
-    if (!existsSync(uploadDir)) {
-      mkdirSync(uploadDir, { recursive: true });
-    }
-
     // Save files and create document records
     const savedDocuments: Array<{
       id: string;
@@ -100,25 +94,30 @@ export async function POST(request: NextRequest) {
       status: string;
     }> = [];
 
+    const storage = getStorage();
+
     for (const file of files) {
       const docId = generateId();
       const ext = path.extname(file.name) || ".bin";
       const savedFileName = `${docId}${ext}`;
-      const filePath = path.join(uploadDir, savedFileName);
+      const key = `checks/${resolvedCheckId}/${savedFileName}`;
 
-      // Read file content and write to disk
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      writeFileSync(filePath, buffer);
 
-      // Create document record
+      const stored = await storage.put(
+        key,
+        buffer,
+        file.type || "application/octet-stream"
+      );
+
       db.insert(documents)
         .values({
           id: docId,
           checkId: resolvedCheckId,
           documentType: "unknown",
           fileName: file.name,
-          filePath,
+          filePath: stored.key,
           mimeType: file.type || "application/octet-stream",
           status: "uploaded",
         })
@@ -127,7 +126,7 @@ export async function POST(request: NextRequest) {
       savedDocuments.push({
         id: docId,
         fileName: file.name,
-        filePath,
+        filePath: stored.key,
         mimeType: file.type || "application/octet-stream",
         documentType: "unknown",
         status: "uploaded",
