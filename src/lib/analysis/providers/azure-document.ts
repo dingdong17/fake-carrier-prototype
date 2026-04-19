@@ -2,6 +2,7 @@ import { readFileSync, statSync, mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { execSync } from "child_process";
+import { PDFParse } from "pdf-parse";
 import { SYSTEM_PROMPT } from "../prompts/system";
 import { CLASSIFY_PROMPT } from "../prompts/classify";
 import { INSURANCE_CERT_PROMPT } from "../prompts/insurance-cert";
@@ -55,36 +56,24 @@ const PDF_SIZE_THRESHOLD_KB = 100;
 const RASTER_DPI = 150;
 const RASTER_MAX_PAGES = 3;
 
-async function extractPdfText(
+export async function extractPdfText(
   filePath: string,
   maxPages: number = 5
 ): Promise<string | null> {
+  const parser = new PDFParse({ data: readFileSync(filePath), verbosity: 0 });
   try {
-    const script = `
-from pypdf import PdfReader
-reader = PdfReader("${filePath.replace(/"/g, '\\"')}")
-pages = min(${maxPages}, len(reader.pages))
-for i in range(pages):
-    text = reader.pages[i].extract_text()
-    if text:
-        print(f"--- SEITE {i+1} von {len(reader.pages)} ---")
-        print(text)
-`;
-    const result = execSync(`python3 -c '${script.replace(/'/g, "'\\''")}'`, {
-      timeout: 10000,
-      encoding: "utf-8",
-    });
-
-    if (result && result.trim().length > 100) {
-      console.log(
-        `[pdf-text] Extracted ${result.length} chars (first ${maxPages} pages)`
-      );
-      return result;
-    }
-    return null;
+    const result = await parser.getText({ first: maxPages });
+    const text = result.text?.trim();
+    if (!text || text.length < 100) return null;
+    console.log(
+      `[pdf-text] Extracted ${text.length} chars from ${result.total} pages (limit ${maxPages})`
+    );
+    return text;
   } catch (err) {
-    console.log(`[pdf-text] Text extraction failed, falling back: ${err}`);
+    console.log(`[pdf-text] pdf-parse failed: ${err}`);
     return null;
+  } finally {
+    await parser.destroy();
   }
 }
 
