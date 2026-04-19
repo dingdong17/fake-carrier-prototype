@@ -23,15 +23,9 @@ function toNonEmptyString(value: unknown): string | null {
 
 function formatCoverageAmount(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
-  const v = value as {
-    amount?: number | null;
-    currency?: string | null;
-    description?: string | null;
-  };
-  if (v.description && v.description.trim() !== "") return v.description;
-  if (typeof v.amount === "number") {
-    const currency = v.currency && v.currency.trim() !== "" ? v.currency : "EUR";
-    return `${v.amount.toLocaleString("de-DE")} ${currency}`;
+  const v = value as { amount?: number | null };
+  if (typeof v.amount === "number" && Number.isFinite(v.amount)) {
+    return v.amount.toLocaleString("de-DE");
   }
   return null;
 }

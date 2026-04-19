@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
   role: "user" | "assistant";
@@ -220,15 +222,42 @@ export function ChatPanel({ checkId, isOpen, onClose }: ChatPanelProps) {
               className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
                   msg.role === "user"
-                    ? "bg-ec-dark-blue text-white"
+                    ? "bg-ec-dark-blue text-white whitespace-pre-wrap"
                     : "bg-ec-light-grey text-ec-grey-80"
                 }`}
               >
-                {msg.content || (isStreaming && i === messages.length - 1 ? (
-                  <span className="inline-block animate-pulse">...</span>
-                ) : null)}
+                {msg.role === "assistant" ? (
+                  msg.content ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: (props) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
+                        ul: (props) => <ul className="mb-2 last:mb-0 list-disc pl-5 space-y-1" {...props} />,
+                        ol: (props) => <ol className="mb-2 last:mb-0 list-decimal pl-5 space-y-1" {...props} />,
+                        li: (props) => <li className="leading-relaxed" {...props} />,
+                        strong: (props) => <strong className="font-semibold text-ec-grey-80" {...props} />,
+                        em: (props) => <em className="italic" {...props} />,
+                        code: (props) => <code className="rounded bg-ec-medium-grey/40 px-1 py-0.5 font-mono text-xs" {...props} />,
+                        pre: (props) => <pre className="mb-2 last:mb-0 rounded bg-ec-medium-grey/40 p-2 font-mono text-xs overflow-x-auto" {...props} />,
+                        h1: (props) => <h3 className="mb-1 mt-1 font-barlow text-base font-semibold" {...props} />,
+                        h2: (props) => <h3 className="mb-1 mt-1 font-barlow text-sm font-semibold" {...props} />,
+                        h3: (props) => <h4 className="mb-1 mt-1 font-barlow text-sm font-semibold" {...props} />,
+                        a: (props) => <a className="text-ec-dark-blue underline hover:no-underline" target="_blank" rel="noreferrer" {...props} />,
+                        table: (props) => <table className="mb-2 last:mb-0 w-full border-collapse text-xs" {...props} />,
+                        th: (props) => <th className="border border-ec-medium-grey px-2 py-1 text-left font-semibold" {...props} />,
+                        td: (props) => <td className="border border-ec-medium-grey px-2 py-1" {...props} />,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : isStreaming && i === messages.length - 1 ? (
+                    <span className="inline-block animate-pulse">...</span>
+                  ) : null
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
           ))}
