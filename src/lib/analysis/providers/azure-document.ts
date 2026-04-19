@@ -1,7 +1,4 @@
-import { readFileSync, statSync, mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import { execSync } from "child_process";
+import { readFileSync, statSync } from "fs";
 import { PDFParse } from "pdf-parse";
 import { SYSTEM_PROMPT } from "../prompts/system";
 import { CLASSIFY_PROMPT } from "../prompts/classify";
@@ -52,10 +49,6 @@ function normalizeImageMime(mimeType: string): string {
   return mimeType;
 }
 
-const PDF_SIZE_THRESHOLD_KB = 100;
-const RASTER_DPI = 150;
-const RASTER_MAX_PAGES = 3;
-
 export async function extractPdfText(
   filePath: string,
   maxPages: number = 5
@@ -77,38 +70,6 @@ export async function extractPdfText(
   }
 }
 
-function rasterizePdf(
-  filePath: string,
-  dpi: number = RASTER_DPI,
-  maxPages: number = RASTER_MAX_PAGES
-): { dir: string; files: string[] } {
-  const dir = mkdtempSync(join(tmpdir(), "fc-pdf-"));
-  const prefix = join(dir, "page");
-  try {
-    execSync(
-      `pdftoppm -jpeg -r ${dpi} -f 1 -l ${maxPages} "${filePath.replace(/"/g, '\\"')}" "${prefix}"`,
-      { timeout: 15000 }
-    );
-    const files: string[] = [];
-    for (let i = 1; i <= maxPages; i++) {
-      const f = `${prefix}-${i}.jpg`;
-      try {
-        statSync(f);
-        files.push(f);
-      } catch {
-        break;
-      }
-    }
-    if (files.length === 0) {
-      throw new Error("pdftoppm produced no output files");
-    }
-    return { dir, files };
-  } catch (err) {
-    rmSync(dir, { recursive: true, force: true });
-    throw err;
-  }
-}
-
 type ImageContent = { type: "image_url"; image_url: { url: string } };
 type TextContent = { type: "text"; text: string };
 type UserContent = ImageContent | TextContent;
@@ -117,37 +78,18 @@ async function buildSmartContent(
   filePath: string,
   mimeType: string
 ): Promise<{ content: UserContent[]; cleanup?: () => void }> {
-  const fileSizeKB = statSync(filePath).size / 1024;
-
   if (isPdf(mimeType)) {
-    if (fileSizeKB > PDF_SIZE_THRESHOLD_KB) {
-      const text = await extractPdfText(filePath, 5);
-      if (text) {
-        console.log(
-          `[smart-content] Text-extraction for ${Math.round(fileSizeKB)}KB PDF (${text.length} chars, ~${Math.round(text.length / 4)} tokens)`
-        );
-        return {
-          content: [
-            { type: "text", text: `[Dokumentinhalt - Erste Seiten]\n\n${text}` },
-          ],
-        };
-      }
-    }
-    const { dir, files } = rasterizePdf(filePath);
-    const blocks: UserContent[] = files.map((p) => {
-      const b64 = readFileSync(p).toString("base64");
+    const text = await extractPdfText(filePath, 5);
+    if (text) {
       return {
-        type: "image_url",
-        image_url: { url: `data:image/jpeg;base64,${b64}` },
+        content: [
+          { type: "text", text: `[Dokumentinhalt - Erste Seiten]\n\n${text}` },
+        ],
       };
-    });
-    console.log(
-      `[smart-content] Rasterized ${Math.round(fileSizeKB)}KB PDF to ${files.length} JPEG(s) @${RASTER_DPI}dpi`
+    }
+    throw new Error(
+      "PDF-Textextraktion fehlgeschlagen. Bitte Dokument als Bild hochladen."
     );
-    return {
-      content: blocks,
-      cleanup: () => rmSync(dir, { recursive: true, force: true }),
-    };
   }
 
   const b64 = readFileSync(filePath).toString("base64");
