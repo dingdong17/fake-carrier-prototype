@@ -230,28 +230,11 @@ export function ChatPanel({ checkId, isOpen, onClose }: ChatPanelProps) {
               >
                 {msg.role === "assistant" ? (
                   msg.content ? (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: (props) => <p className="mb-2 last:mb-0 leading-relaxed" {...props} />,
-                        ul: (props) => <ul className="mb-2 last:mb-0 list-disc pl-5 space-y-1" {...props} />,
-                        ol: (props) => <ol className="mb-2 last:mb-0 list-decimal pl-5 space-y-1" {...props} />,
-                        li: (props) => <li className="leading-relaxed" {...props} />,
-                        strong: (props) => <strong className="font-semibold text-ec-grey-80" {...props} />,
-                        em: (props) => <em className="italic" {...props} />,
-                        code: (props) => <code className="rounded bg-ec-medium-grey/40 px-1 py-0.5 font-mono text-xs" {...props} />,
-                        pre: (props) => <pre className="mb-2 last:mb-0 rounded bg-ec-medium-grey/40 p-2 font-mono text-xs overflow-x-auto" {...props} />,
-                        h1: (props) => <h3 className="mb-1 mt-1 font-barlow text-base font-semibold" {...props} />,
-                        h2: (props) => <h3 className="mb-1 mt-1 font-barlow text-sm font-semibold" {...props} />,
-                        h3: (props) => <h4 className="mb-1 mt-1 font-barlow text-sm font-semibold" {...props} />,
-                        a: (props) => <a className="text-ec-dark-blue underline hover:no-underline" target="_blank" rel="noreferrer" {...props} />,
-                        table: (props) => <table className="mb-2 last:mb-0 w-full border-collapse text-xs" {...props} />,
-                        th: (props) => <th className="border border-ec-medium-grey px-2 py-1 text-left font-semibold" {...props} />,
-                        td: (props) => <td className="border border-ec-medium-grey px-2 py-1" {...props} />,
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
+                    <div className="space-y-2 text-sm leading-relaxed [&_p]:leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1 [&_strong]:font-semibold [&_em]:italic [&_code]:rounded [&_code]:bg-ec-medium-grey/40 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_pre]:rounded [&_pre]:bg-ec-medium-grey/40 [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:overflow-x-auto [&_h1]:font-barlow [&_h1]:text-base [&_h1]:font-semibold [&_h2]:font-barlow [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:font-barlow [&_h3]:text-sm [&_h3]:font-semibold [&_a]:text-ec-dark-blue [&_a]:underline hover:[&_a]:no-underline [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_th]:border [&_th]:border-ec-medium-grey [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-ec-medium-grey [&_td]:px-2 [&_td]:py-1">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
                   ) : isStreaming && i === messages.length - 1 ? (
                     <span className="inline-block animate-pulse">...</span>
                   ) : null
