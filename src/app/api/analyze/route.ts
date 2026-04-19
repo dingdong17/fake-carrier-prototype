@@ -2,82 +2,18 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { checks, documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import {
-  classifyDocument,
-  claudeDocumentProvider,
-} from "@/lib/analysis/providers/claude-document";
-import { buildCrossCheckPrompt } from "@/lib/analysis/prompts/cross-check";
+import { classifyDocument } from "@/lib/analysis/providers/azure-document";
 import {
   calculateRiskScore,
   calculateConfidenceLevel,
   determineRecommendation,
   generateGuidance,
 } from "@/lib/analysis/scoring";
-import { SYSTEM_PROMPT } from "@/lib/analysis/prompts/system";
-import Anthropic from "@anthropic-ai/sdk";
-import type {
-  ProviderResult,
-  CrossCheckResult,
-} from "@/lib/analysis/providers/types";
-
-const client = new Anthropic();
-
-function parseJsonResponse(text: string): Record<string, unknown> {
-  const match = text.match(/{[\s\S]*}/);
-  if (!match) {
-    throw new Error("No JSON object found in response");
-  }
-  return JSON.parse(match[0]) as Record<string, unknown>;
-}
-
-async function runCrossCheck(
-  documentResults: ProviderResult[]
-): Promise<CrossCheckResult> {
-  if (documentResults.length < 2) {
-    return { consistencyScore: 1.0, mismatches: [], patterns: [] };
-  }
-
-  const extractedData = documentResults.map((r) => ({
-    documentType: r.documentType,
-    fields: r.extraction.fields,
-  }));
-
-  const prompt = buildCrossCheckPrompt(extractedData);
-
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: prompt,
-      },
-    ],
-  });
-
-  const textBlock = response.content.find((block) => block.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
-    throw new Error("No text response from cross-check");
-  }
-
-  const parsed = parseJsonResponse(textBlock.text);
-
-  return {
-    consistencyScore: (parsed.consistencyScore as number) || 0,
-    mismatches:
-      ((parsed.mismatches as CrossCheckResult["mismatches"]) || []).map(
-        (m) => ({
-          field: m.field || "",
-          documents: m.documents || [],
-          values: m.values || [],
-          severity: m.severity || "minor",
-          description: m.description || "",
-        })
-      ),
-    patterns: (parsed.patterns as string[]) || [],
-  };
-}
+import {
+  analyzeDocumentWithForensics,
+  runCrossCheck,
+} from "@/lib/analysis/pipeline";
+import type { ProviderResult } from "@/lib/analysis/providers/types";
 
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
@@ -215,7 +151,7 @@ export async function POST(request: NextRequest) {
               .where(eq(documents.id, doc.id))
               .run();
 
-            const result = await claudeDocumentProvider.analyze(
+            const result = await analyzeDocumentWithForensics(
               doc.filePath,
               doc.documentType,
               doc.mimeType,
@@ -260,14 +196,29 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Step 2: Cross-document consistency check
-        sendEvent({
-          type: "status",
-          message: "Dokumentübergreifende Konsistenzprüfung...",
-          step: "cross_check",
-        });
-
-        const crossCheck = await runCrossCheck(documentResults);
+        // Step 2: Cross-document consistency check (skipped for Quick tier)
+        const skippedChecks: string[] = [];
+        let crossCheck;
+        if (check.testSet === "quick") {
+          skippedChecks.push("cross-document-consistency");
+          crossCheck = {
+            consistencyScore: 1.0,
+            mismatches: [],
+            patterns: [],
+          };
+          sendEvent({
+            type: "status",
+            message: "Konsistenzprüfung übersprungen (Schnell-Modus)",
+            step: "cross_check_skipped",
+          });
+        } else {
+          sendEvent({
+            type: "status",
+            message: "Dokumentübergreifende Konsistenzprüfung...",
+            step: "cross_check",
+          });
+          crossCheck = await runCrossCheck(documentResults);
+        }
 
         // Step 3: Compute scores
         sendEvent({

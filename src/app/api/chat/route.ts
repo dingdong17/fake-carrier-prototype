@@ -1,12 +1,11 @@
 import { NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
 import { checks, documents, chatMessages } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { SYSTEM_PROMPT } from "@/lib/analysis/prompts/system";
 import { generateId } from "@/lib/utils";
-
-const client = new Anthropic();
+import { getAzureClient, CHAT_DEPLOYMENT } from "@/lib/azure-openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 function buildContextMessage(
   check: typeof checks.$inferSelect,
@@ -69,7 +68,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 1. Load check
   const check = db.select().from(checks).where(eq(checks.id, checkId)).get();
   if (!check) {
     return new Response(
@@ -78,14 +76,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 2. Load documents
   const checkDocs = db
     .select()
     .from(documents)
     .where(eq(documents.checkId, checkId))
     .all();
 
-  // 3. Load chat history
   const history = db
     .select()
     .from(chatMessages)
@@ -93,7 +89,6 @@ export async function POST(request: NextRequest) {
     .orderBy(asc(chatMessages.createdAt))
     .all();
 
-  // 4. Save user message
   db.insert(chatMessages)
     .values({
       id: generateId(),
@@ -103,59 +98,51 @@ export async function POST(request: NextRequest) {
     })
     .run();
 
-  // 5. Build messages array
   const contextMessage = buildContextMessage(check, checkDocs);
 
-  const messages: Anthropic.MessageParam[] = [];
+  const messages: ChatCompletionMessageParam[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content: contextMessage },
+    {
+      role: "assistant",
+      content:
+        "Verstanden. Ich habe die Prüfergebnisse und Dokumente geladen. Wie kann ich Ihnen helfen?",
+    },
+  ];
 
-  // First message: context + any history
-  messages.push({
-    role: "user",
-    content: contextMessage,
-  });
-  messages.push({
-    role: "assistant",
-    content:
-      "Verstanden. Ich habe die Prüfergebnisse und Dokumente geladen. Wie kann ich Ihnen helfen?",
-  });
-
-  // Add history
   for (const msg of history) {
     if (msg.role === "user" || msg.role === "assistant") {
       messages.push({ role: msg.role, content: msg.content });
     }
   }
 
-  // Add the new user message
   messages.push({ role: "user", content: message });
 
-  // 6. Call Claude with streaming
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const response = await client.messages.create({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4096,
-          system: SYSTEM_PROMPT,
+        const response = await getAzureClient().chat.completions.create({
+          model: CHAT_DEPLOYMENT,
           messages,
+          max_completion_tokens: 4096,
+          temperature: 0,
           stream: true,
         });
 
         let fullText = "";
 
         for await (const event of response) {
-          if (
-            event.type === "content_block_delta" &&
-            event.delta.type === "text_delta"
-          ) {
-            const chunk = event.delta.text;
-            fullText += chunk;
-            const payload = `data: ${JSON.stringify({ text: chunk })}\n\n`;
+          // Azure emits a prompt-filter preflight event with empty choices;
+          // the final usage event (when include_usage is set) also has empty choices.
+          if (!event.choices || event.choices.length === 0) continue;
+          const delta = event.choices[0].delta?.content;
+          if (delta) {
+            fullText += delta;
+            const payload = `data: ${JSON.stringify({ text: delta })}\n\n`;
             controller.enqueue(encoder.encode(payload));
           }
         }
 
-        // 8. Save assistant response
         db.insert(chatMessages)
           .values({
             id: generateId(),
@@ -165,7 +152,6 @@ export async function POST(request: NextRequest) {
           })
           .run();
 
-        // 9. Send done event
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`),
         );

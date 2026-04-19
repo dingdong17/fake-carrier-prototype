@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { classifyDocument } from "@/lib/analysis/providers/claude-document";
-import { claudeDocumentProvider } from "@/lib/analysis/providers/claude-document";
+import { classifyDocument } from "@/lib/analysis/providers/azure-document";
+import { analyzeDocumentWithForensics } from "@/lib/analysis/pipeline";
 import { appendFileSync, mkdirSync, existsSync } from "fs";
 import path from "path";
 
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
       logAnalytics(`EXTRACT start | file=${doc.fileName} | type=${classification.documentType} | ${classification.timing.fileSizeKB}KB`);
 
-      const result = await claudeDocumentProvider.analyze(
+      const result = await analyzeDocumentWithForensics(
         doc.filePath,
         classification.documentType,
         doc.mimeType,
@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
       // Save extraction to document record
       db.update(documents)
         .set({
-          extractedFields: extractedData as any,
+          extractedFields: extractedData as Record<string, unknown>,
+          riskSignals: result.extraction.riskSignals as unknown as Record<string, unknown>,
           confidence: result.extraction.confidence,
           status: "analyzed",
         })
