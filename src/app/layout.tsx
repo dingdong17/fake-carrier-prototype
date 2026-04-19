@@ -27,7 +27,7 @@ export default function RootLayout({
         <BrandProvider>
           <NavigationBlockerProvider>
             <Header />
-            <main className="mx-auto w-full max-w-[1304px] xl:max-w-[1600px] 2xl:max-w-[1920px] flex-1 px-6 py-8">
+            <main className="mx-auto w-full flex-1 px-6 py-8">
               {children}
             </main>
             <Footer />
