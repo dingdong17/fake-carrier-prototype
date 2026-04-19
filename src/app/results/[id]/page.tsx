@@ -30,7 +30,14 @@ interface DocumentData {
   documentType: string;
   fileName: string;
   extractedFields: Record<string, unknown> | null;
-  riskSignals: Array<{ ruleId: string; severity: "critical" | "high" | "medium" | "low"; message: string }> | null;
+  riskSignals: Array<{
+    rule?: string;
+    ruleId?: string;
+    severity: string;
+    description?: string;
+    message?: string;
+    points?: number;
+  }> | null;
   documentScore: number | null;
   confidence: number | null;
 }

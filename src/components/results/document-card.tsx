@@ -6,9 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { DOCUMENT_TYPES } from "@/lib/config/document-types";
 
 interface RiskSignal {
-  ruleId: string;
-  severity: "critical" | "high" | "medium" | "low";
-  message: string;
+  rule?: string;
+  ruleId?: string;
+  severity: string;
+  description?: string;
+  message?: string;
+  points?: number;
 }
 
 interface DocumentCardProps {
@@ -23,12 +26,32 @@ interface DocumentCardProps {
   };
 }
 
-const severityVariant: Record<string, "critical" | "high" | "medium" | "low"> = {
+type BadgeVariant = "critical" | "high" | "medium" | "low" | "success" | "warning" | "info" | "neutral";
+
+const severityVariant: Record<string, BadgeVariant> = {
   critical: "critical",
   high: "high",
+  major: "high",
   medium: "medium",
+  minor: "medium",
   low: "low",
 };
+
+const severityLabel: Record<string, string> = {
+  critical: "Kritisch",
+  major: "Hoch",
+  high: "Hoch",
+  medium: "Mittel",
+  minor: "Niedrig",
+  low: "Niedrig",
+};
+
+function renderMetaValue(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
 
 export function DocumentCard({ document: doc }: DocumentCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -36,8 +59,13 @@ export function DocumentCard({ document: doc }: DocumentCardProps) {
   const docType = DOCUMENT_TYPES[doc.documentType];
   const typeName = docType?.labelDe ?? doc.documentType;
   const signals = doc.riskSignals ?? [];
-  const fields = doc.extractedFields ?? {};
-  const fieldEntries = Object.entries(fields);
+  const rawFields = (doc.extractedFields ?? {}) as Record<string, unknown>;
+  const forensicMetadata = rawFields.forensicMetadata as Record<string, unknown> | undefined;
+  const fieldEntries = Object.entries(rawFields).filter(([k]) => k !== "forensicMetadata");
+  const forensicEntries = forensicMetadata ? Object.entries(forensicMetadata) : [];
+
+  const hasCritical = signals.some((s) => s.severity === "critical");
+  const hasHigh = signals.some((s) => s.severity === "major" || s.severity === "high");
 
   return (
     <Card className="overflow-hidden">
@@ -59,7 +87,7 @@ export function DocumentCard({ document: doc }: DocumentCardProps) {
         </div>
         <div className="flex items-center gap-2">
           {signals.length > 0 && (
-            <Badge variant={signals.some((s) => s.severity === "critical") ? "critical" : signals.some((s) => s.severity === "high") ? "high" : "medium"}>
+            <Badge variant={hasCritical ? "critical" : hasHigh ? "high" : "medium"}>
               {signals.length} Signal{signals.length !== 1 ? "e" : ""}
             </Badge>
           )}
@@ -98,7 +126,7 @@ export function DocumentCard({ document: doc }: DocumentCardProps) {
                     {fieldEntries.map(([key, value]) => (
                       <tr key={key} className="border-b border-ec-grey-40 last:border-0">
                         <td className="py-1.5 pr-4 text-ec-grey-70">{key}</td>
-                        <td className="py-1.5 text-ec-grey-80">{String(value)}</td>
+                        <td className="py-1.5 text-ec-grey-80">{renderMetaValue(value)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -107,24 +135,57 @@ export function DocumentCard({ document: doc }: DocumentCardProps) {
             </div>
           )}
 
+          {/* Forensic metadata */}
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold text-ec-grey-80 mb-2">Forensische Prüfung</h4>
+            {forensicEntries.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-ec-grey-40">
+                      <th className="text-left py-1.5 pr-4 text-ec-grey-70 font-medium">Feld</th>
+                      <th className="text-left py-1.5 text-ec-grey-70 font-medium">Wert</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forensicEntries.map(([key, value]) => (
+                      <tr key={key} className="border-b border-ec-grey-40 last:border-0">
+                        <td className="py-1.5 pr-4 text-ec-grey-70">{key}</td>
+                        <td className="py-1.5 text-ec-grey-80">{renderMetaValue(value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-ec-grey-70">Keine forensischen Metadaten gefunden.</p>
+            )}
+          </div>
+
           {/* Risk signals */}
           {signals.length > 0 && (
             <div className="mt-4">
               <h4 className="text-sm font-semibold text-ec-grey-80 mb-2">Risikosignale</h4>
               <div className="space-y-2">
-                {signals.map((signal, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <Badge variant={severityVariant[signal.severity] ?? "neutral"}>
-                      {signal.severity}
-                    </Badge>
-                    <span className="text-sm text-ec-grey-80">{signal.message}</span>
-                  </div>
-                ))}
+                {signals.map((signal, i) => {
+                  const variant = severityVariant[signal.severity] ?? "neutral";
+                  const label = severityLabel[signal.severity] ?? signal.severity;
+                  const text = signal.description ?? signal.message ?? signal.rule ?? signal.ruleId ?? "";
+                  return (
+                    <div key={i} className="flex items-start gap-2">
+                      <Badge variant={variant}>{label}</Badge>
+                      <span className="text-sm text-ec-grey-80">
+                        {text}
+                        {signal.points ? <span className="text-ec-grey-70"> (+{signal.points})</span> : null}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {fieldEntries.length === 0 && signals.length === 0 && (
+          {fieldEntries.length === 0 && forensicEntries.length === 0 && signals.length === 0 && (
             <p className="mt-4 text-sm text-ec-grey-70">Keine extrahierten Daten vorhanden.</p>
           )}
         </div>

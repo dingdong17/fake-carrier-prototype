@@ -15,6 +15,9 @@ export async function POST(request: NextRequest) {
     const carrierName = formData.get("carrierName") as string | null;
     const carrierCountry = formData.get("carrierCountry") as string | null;
     const carrierVatId = formData.get("carrierVatId") as string | null;
+    const testSetRaw = formData.get("testSet") as string | null;
+    const testSet: "quick" | "medium" | "full" =
+      testSetRaw === "quick" || testSetRaw === "full" ? testSetRaw : "medium";
 
     if (!files || files.length === 0) {
       return NextResponse.json(
@@ -76,6 +79,7 @@ export async function POST(request: NextRequest) {
           carrierCountry: carrierCountry || null,
           carrierVatId: carrierVatId || null,
           status: "draft",
+          testSet,
         })
         .run();
     }

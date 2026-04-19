@@ -17,6 +17,11 @@ export const checks = sqliteTable("checks", {
   })
     .notNull()
     .default("draft"),
+  testSet: text("test_set", {
+    enum: ["quick", "medium", "full"],
+  })
+    .notNull()
+    .default("medium"),
   createdAt: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
