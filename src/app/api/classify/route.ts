@@ -6,6 +6,8 @@ import { classifyDocument } from "@/lib/analysis/providers/azure-document";
 import { analyzeDocumentWithForensics } from "@/lib/analysis/pipeline";
 import { logEvent } from "@/lib/analytics";
 
+export const maxDuration = 180;
+
 export async function POST(request: NextRequest) {
   const requestStart = Date.now();
 

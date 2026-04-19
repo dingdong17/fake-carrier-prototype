@@ -7,6 +7,8 @@ import { generateId } from "@/lib/utils";
 import { getAzureClient, CHAT_DEPLOYMENT } from "@/lib/azure-openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
+export const maxDuration = 120;
+
 function buildContextMessage(
   check: typeof checks.$inferSelect,
   docs: (typeof documents.$inferSelect)[],

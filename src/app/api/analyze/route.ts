@@ -15,6 +15,8 @@ import {
 } from "@/lib/analysis/pipeline";
 import type { ProviderResult } from "@/lib/analysis/providers/types";
 
+export const maxDuration = 180;
+
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
 
