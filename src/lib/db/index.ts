@@ -1,16 +1,12 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
-import { existsSync, mkdirSync } from "fs";
-import path from "path";
 
-const dbDir = path.join(process.cwd(), "data");
-if (!existsSync(dbDir)) {
-  mkdirSync(dbDir, { recursive: true });
-}
+const url = process.env.TURSO_DATABASE_URL || "file:./data/fakecarrier.db";
+const authToken = process.env.TURSO_AUTH_TOKEN;
 
-const dbPath = path.join(dbDir, "fakecarrier.db");
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
+const client = createClient(
+  authToken ? { url, authToken } : { url }
+);
 
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(client, { schema });

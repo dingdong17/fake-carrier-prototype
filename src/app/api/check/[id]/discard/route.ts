@@ -13,7 +13,7 @@ export async function DELETE(
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  const check = db.select().from(checks).where(eq(checks.id, id)).get();
+  const check = await db.select().from(checks).where(eq(checks.id, id)).get();
   if (!check) {
     return NextResponse.json({ error: "Check not found" }, { status: 404 });
   }
@@ -25,9 +25,9 @@ export async function DELETE(
     );
   }
 
-  db.delete(chatMessages).where(eq(chatMessages.checkId, id)).run();
-  db.delete(documents).where(eq(documents.checkId, id)).run();
-  db.delete(checks).where(eq(checks.id, id)).run();
+  await db.delete(chatMessages).where(eq(chatMessages.checkId, id)).run();
+  await db.delete(documents).where(eq(documents.checkId, id)).run();
+  await db.delete(checks).where(eq(checks.id, id)).run();
 
   try {
     await getStorage().deletePrefix(`checks/${id}`);

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const doc = db
+    const doc = await db
       .select()
       .from(documents)
       .where(eq(documents.id, documentId))
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     logAnalytics(`CLASSIFY done | file=${doc.fileName} | type=${classification.documentType} | ${classification.timing.fileSizeKB}KB | classifyApi=${classification.timing.apiCallMs}ms | total=${classifyMs}ms`);
 
     // Update document type in DB
-    db.update(documents)
+    await db.update(documents)
       .set({ documentType: classification.documentType })
       .where(eq(documents.id, documentId))
       .run();
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       logAnalytics(`EXTRACT done | file=${doc.fileName} | fields=${fieldCount} | signals=${signalCount} | extractApi=${extractMs}ms`);
 
       // Save extraction to document record
-      db.update(documents)
+      await db.update(documents)
         .set({
           extractedFields: extractedData as Record<string, unknown>,
           riskSignals: result.extraction.riskSignals as unknown as Record<string, unknown>,

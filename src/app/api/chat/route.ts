@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const check = db.select().from(checks).where(eq(checks.id, checkId)).get();
+  const check = await db.select().from(checks).where(eq(checks.id, checkId)).get();
   if (!check) {
     return new Response(
       JSON.stringify({ error: "Check not found" }),
@@ -76,20 +76,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const checkDocs = db
+  const checkDocs = await db
     .select()
     .from(documents)
     .where(eq(documents.checkId, checkId))
     .all();
 
-  const history = db
+  const history = await db
     .select()
     .from(chatMessages)
     .where(eq(chatMessages.checkId, checkId))
     .orderBy(asc(chatMessages.createdAt))
     .all();
 
-  db.insert(chatMessages)
+  await db.insert(chatMessages)
     .values({
       id: generateId(),
       checkId,
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        db.insert(chatMessages)
+        await db.insert(chatMessages)
           .values({
             id: generateId(),
             checkId,

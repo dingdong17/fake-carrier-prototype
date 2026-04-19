@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const id = request.nextUrl.searchParams.get("id");
 
     if (id) {
-      const check = db
+      const check = await db
         .select()
         .from(checks)
         .where(eq(checks.id, id))
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const checkDocuments = db
+      const checkDocuments = await db
         .select()
         .from(documents)
         .where(eq(documents.checkId, id))
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ check, documents: checkDocuments });
     }
 
-    const allChecks = db
+    const allChecks = await db
       .select()
       .from(checks)
       .orderBy(desc(checks.createdAt))
@@ -56,9 +56,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete related records first (foreign key constraints)
-    db.delete(chatMessages).where(eq(chatMessages.checkId, id)).run();
-    db.delete(documents).where(eq(documents.checkId, id)).run();
-    db.delete(checks).where(eq(checks.id, id)).run();
+    await db.delete(chatMessages).where(eq(chatMessages.checkId, id)).run();
+    await db.delete(documents).where(eq(documents.checkId, id)).run();
+    await db.delete(checks).where(eq(checks.id, id)).run();
 
     // Delete uploaded files
     const uploadDir = path.join(process.cwd(), "uploads", id);

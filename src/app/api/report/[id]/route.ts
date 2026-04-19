@@ -10,13 +10,13 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const check = db.select().from(checks).where(eq(checks.id, id)).get();
+  const check = await db.select().from(checks).where(eq(checks.id, id)).get();
 
   if (!check) {
     return NextResponse.json({ error: "Check not found" }, { status: 404 });
   }
 
-  const docs = db
+  const docs = await db
     .select()
     .from(documents)
     .where(eq(documents.checkId, id))

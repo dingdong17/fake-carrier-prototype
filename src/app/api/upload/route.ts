@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     if (checkId) {
       // Existing check — verify it exists
-      const existing = db
+      const existing = await db
         .select()
         .from(checks)
         .where(eq(checks.id, checkId))
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
       // Update carrier info if provided
       if (carrierName) {
-        db.update(checks)
+        await db.update(checks)
           .set({
             carrierName,
             carrierCountry: carrierCountry || existing.carrierCountry,
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Create a new check — carrier name can be filled later (e.g. from AI extraction)
       resolvedCheckId = generateId();
-      const result = db
+      const result = await db
         .select({ maxNum: sql<string>`max(check_number)` })
         .from(checks)
         .get();
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       const seq = (isNaN(lastNum) ? 0 : lastNum) + 1;
       checkNumber = formatCheckNumber(seq);
 
-      db.insert(checks)
+      await db.insert(checks)
         .values({
           id: resolvedCheckId,
           checkNumber,
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
         file.type || "application/octet-stream"
       );
 
-      db.insert(documents)
+      await db.insert(documents)
         .values({
           id: docId,
           checkId: resolvedCheckId,
