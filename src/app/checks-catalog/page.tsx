@@ -123,7 +123,7 @@ export default function ChecksCatalogPage() {
     .filter((g) => g.checks.length > 0);
 
   return (
-    <div className="mx-auto max-w-content space-y-6 p-6">
+    <div className="space-y-6 p-6">
       <header className="space-y-2">
         <h1 className="font-barlow text-2xl font-bold text-ec-dark-blue">
           Prüfkatalog

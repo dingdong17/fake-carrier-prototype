@@ -197,7 +197,7 @@ export default function ResultsPage() {
 
   return (
     <div className="min-h-screen bg-ec-light-grey">
-      <div className="mx-auto max-w-content px-6 py-8">
+      <div className="px-6 py-8">
         {/* Progress */}
         <div className="mb-8">
           <ProgressBar currentStep={3} />

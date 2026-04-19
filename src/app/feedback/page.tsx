@@ -52,7 +52,7 @@ export default function FeedbackPage() {
 
   return (
     <div className="min-h-screen bg-ec-light-grey">
-      <div className="mx-auto max-w-content px-6 py-8">
+      <div className="px-6 py-8">
         <h1 className="text-2xl font-bold font-barlow text-ec-grey-80 mb-6">
           Feedback
         </h1>
