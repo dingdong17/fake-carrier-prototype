@@ -1,4 +1,4 @@
-import { PDFParse } from "pdf-parse";
+import { extractText } from "unpdf";
 import { SYSTEM_PROMPT } from "../prompts/system";
 import { CLASSIFY_PROMPT } from "../prompts/classify";
 import { INSURANCE_CERT_PROMPT } from "../prompts/insurance-cert";
@@ -53,20 +53,20 @@ export async function extractPdfText(
   buffer: Buffer,
   maxPages: number = 5
 ): Promise<string | null> {
-  const parser = new PDFParse({ data: buffer, verbosity: 0 });
   try {
-    const result = await parser.getText({ first: maxPages });
-    const text = result.text?.trim();
+    const result = await extractText(new Uint8Array(buffer), {
+      mergePages: false,
+    });
+    const firstPages = result.text.slice(0, maxPages);
+    const text = firstPages.join("\n\n").trim();
     if (!text || text.length < 100) return null;
     console.log(
-      `[pdf-text] Extracted ${text.length} chars from ${result.total} pages (limit ${maxPages})`
+      `[pdf-text] Extracted ${text.length} chars from ${result.totalPages} pages (limit ${maxPages})`
     );
     return text;
   } catch (err) {
-    console.log(`[pdf-text] pdf-parse failed: ${err}`);
+    console.log(`[pdf-text] unpdf failed: ${err}`);
     return null;
-  } finally {
-    await parser.destroy();
   }
 }
 
