@@ -1,9 +1,9 @@
-import { readFileSync } from "fs";
 import { azureDocumentProvider } from "./providers/azure-document";
 import { buildCrossCheckPrompt } from "./prompts/cross-check";
 import { SYSTEM_PROMPT } from "./prompts/system";
 import { applyForensicAnalysis } from "./forensic";
 import { getAzureClient, ANALYSIS_DEPLOYMENT } from "@/lib/azure-openai";
+import { getStorage } from "@/lib/storage";
 import type { ProviderResult, CrossCheckResult } from "./providers/types";
 
 function parseJsonResponse(text: string): Record<string, unknown> {
@@ -27,7 +27,7 @@ export async function analyzeDocumentWithForensics(
     carrierInfo
   );
   try {
-    const buffer = readFileSync(filePath);
+    const buffer = await getStorage().get(filePath);
     return await applyForensicAnalysis(result, buffer, mimeType);
   } catch {
     return result;

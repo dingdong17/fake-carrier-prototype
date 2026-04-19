@@ -1,5 +1,5 @@
 import { describe, it, expect, type TestContext } from "vitest";
-import { statSync } from "fs";
+import { statSync, readFileSync } from "fs";
 import path from "path";
 
 // Test the module structure. We can't easily mock the OpenAI SDK inline,
@@ -39,7 +39,8 @@ describe("azure-document PDF text extraction", () => {
     } catch {
       ctx.skip();
     }
-    const text = await mod.extractPdfText(samplePath, 5);
+    const buffer = readFileSync(samplePath);
+    const text = await mod.extractPdfText(buffer, 5);
     expect(text).toBeTruthy();
     expect(text!.length).toBeGreaterThan(500);
     expect(text).toContain("Versicherung");

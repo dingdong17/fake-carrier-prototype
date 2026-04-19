@@ -1,4 +1,3 @@
-import { readFileSync, statSync } from "fs";
 import { PDFParse } from "pdf-parse";
 import { SYSTEM_PROMPT } from "../prompts/system";
 import { CLASSIFY_PROMPT } from "../prompts/classify";
@@ -9,6 +8,7 @@ import { FREIGHT_PROFILE_PROMPT } from "../prompts/freight-profile";
 import { COMMUNICATION_PROMPT } from "../prompts/communication";
 import { DRIVER_VEHICLE_PROMPT } from "../prompts/driver-vehicle";
 import { getAzureClient, ANALYSIS_DEPLOYMENT } from "@/lib/azure-openai";
+import { getStorage } from "@/lib/storage";
 import type {
   AnalysisProvider,
   ProviderResult,
@@ -50,10 +50,10 @@ function normalizeImageMime(mimeType: string): string {
 }
 
 export async function extractPdfText(
-  filePath: string,
+  buffer: Buffer,
   maxPages: number = 5
 ): Promise<string | null> {
-  const parser = new PDFParse({ data: readFileSync(filePath), verbosity: 0 });
+  const parser = new PDFParse({ data: buffer, verbosity: 0 });
   try {
     const result = await parser.getText({ first: maxPages });
     const text = result.text?.trim();
@@ -75,11 +75,11 @@ type TextContent = { type: "text"; text: string };
 type UserContent = ImageContent | TextContent;
 
 async function buildSmartContent(
-  filePath: string,
+  buffer: Buffer,
   mimeType: string
-): Promise<{ content: UserContent[]; cleanup?: () => void }> {
+): Promise<{ content: UserContent[] }> {
   if (isPdf(mimeType)) {
-    const text = await extractPdfText(filePath, 5);
+    const text = await extractPdfText(buffer, 5);
     if (text) {
       return {
         content: [
@@ -92,7 +92,7 @@ async function buildSmartContent(
     );
   }
 
-  const b64 = readFileSync(filePath).toString("base64");
+  const b64 = buffer.toString("base64");
   return {
     content: [
       {
@@ -149,58 +149,56 @@ export async function classifyDocument(
   const totalStart = Date.now();
 
   const readStart = Date.now();
-  const fileSizeKB = Math.round(statSync(documentPath).size / 1024);
-  const { content, cleanup } = await buildSmartContent(documentPath, mimeType);
+  const storage = getStorage();
+  const buffer = await storage.get(documentPath);
+  const fileSizeKB = Math.round(buffer.length / 1024);
+  const { content } = await buildSmartContent(buffer, mimeType);
   const fileReadMs = Date.now() - readStart;
 
   console.log(
     `[classify] File: ${documentPath}, Size: ${fileSizeKB}KB, Prep: ${fileReadMs}ms`
   );
 
-  try {
-    const apiStart = Date.now();
-    const response = await withTimeout(
-      getAzureClient().chat.completions.create({
-        model: ANALYSIS_DEPLOYMENT,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [...content, { type: "text", text: CLASSIFY_PROMPT }],
-          },
-        ],
-        max_completion_tokens: 1024,
-        temperature: 0,
-      }),
-      CLASSIFY_TIMEOUT_MS,
-      `Dokumentklassifizierung (${fileSizeKB}KB)`
-    );
-    const apiCallMs = Date.now() - apiStart;
+  const apiStart = Date.now();
+  const response = await withTimeout(
+    getAzureClient().chat.completions.create({
+      model: ANALYSIS_DEPLOYMENT,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: [...content, { type: "text", text: CLASSIFY_PROMPT }],
+        },
+      ],
+      max_completion_tokens: 1024,
+      temperature: 0,
+    }),
+    CLASSIFY_TIMEOUT_MS,
+    `Dokumentklassifizierung (${fileSizeKB}KB)`
+  );
+  const apiCallMs = Date.now() - apiStart;
 
-    const msg = response.choices[0]?.message?.content;
-    if (!msg) {
-      throw new Error("No text response from classification");
-    }
-
-    console.log(
-      `[classify] API: ${apiCallMs}ms, Tokens in/out: ${response.usage?.prompt_tokens}/${response.usage?.completion_tokens}`
-    );
-
-    const parsed = parseJsonResponse(msg);
-    const totalMs = Date.now() - totalStart;
-    console.log(
-      `[classify] Total: ${totalMs}ms, Result: ${parsed.documentType}`
-    );
-
-    return {
-      documentType: (parsed.documentType as string) || "unknown",
-      confidence: (parsed.confidence as number) || 0,
-      reasoning: (parsed.reasoning as string) || "",
-      timing: { fileReadMs, fileSizeKB, apiCallMs, totalMs },
-    };
-  } finally {
-    cleanup?.();
+  const msg = response.choices[0]?.message?.content;
+  if (!msg) {
+    throw new Error("No text response from classification");
   }
+
+  console.log(
+    `[classify] API: ${apiCallMs}ms, Tokens in/out: ${response.usage?.prompt_tokens}/${response.usage?.completion_tokens}`
+  );
+
+  const parsed = parseJsonResponse(msg);
+  const totalMs = Date.now() - totalStart;
+  console.log(
+    `[classify] Total: ${totalMs}ms, Result: ${parsed.documentType}`
+  );
+
+  return {
+    documentType: (parsed.documentType as string) || "unknown",
+    confidence: (parsed.confidence as number) || 0,
+    reasoning: (parsed.reasoning as string) || "",
+    timing: { fileReadMs, fileSizeKB, apiCallMs, totalMs },
+  };
 }
 
 export const azureDocumentProvider: AnalysisProvider = {
@@ -215,8 +213,10 @@ export const azureDocumentProvider: AnalysisProvider = {
   ): Promise<ProviderResult> {
     const totalStart = Date.now();
 
-    const fileSizeKB = Math.round(statSync(documentPath).size / 1024);
-    const { content, cleanup } = await buildSmartContent(documentPath, mimeType);
+    const storage = getStorage();
+    const buffer = await storage.get(documentPath);
+    const fileSizeKB = Math.round(buffer.length / 1024);
+    const { content } = await buildSmartContent(buffer, mimeType);
     const prompt = getAnalysisPrompt(documentType);
 
     const carrierContext = `\n\nKONTEXT zum Frachtführer:\n- Name: ${carrierInfo.name}${carrierInfo.country ? `\n- Land: ${carrierInfo.country}` : ""}${carrierInfo.vatId ? `\n- USt-IdNr: ${carrierInfo.vatId}` : ""}`;
@@ -225,72 +225,68 @@ export const azureDocumentProvider: AnalysisProvider = {
       `[analyze] File: ${documentPath}, Size: ${fileSizeKB}KB, Type: ${documentType}, Timeout: ${ANALYSIS_TIMEOUT_MS / 1000}s`
     );
 
-    try {
-      const apiStart = Date.now();
-      const response = await withTimeout(
-        getAzureClient().chat.completions.create({
-          model: ANALYSIS_DEPLOYMENT,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: [
-                ...content,
-                { type: "text", text: prompt + carrierContext },
-              ],
-            },
-          ],
-          max_completion_tokens: 4096,
-          temperature: 0,
-        }),
-        ANALYSIS_TIMEOUT_MS,
-        `Dokumentanalyse (${fileSizeKB}KB, ${documentType})`
-      );
-      const apiCallMs = Date.now() - apiStart;
+    const apiStart = Date.now();
+    const response = await withTimeout(
+      getAzureClient().chat.completions.create({
+        model: ANALYSIS_DEPLOYMENT,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              ...content,
+              { type: "text", text: prompt + carrierContext },
+            ],
+          },
+        ],
+        max_completion_tokens: 4096,
+        temperature: 0,
+      }),
+      ANALYSIS_TIMEOUT_MS,
+      `Dokumentanalyse (${fileSizeKB}KB, ${documentType})`
+    );
+    const apiCallMs = Date.now() - apiStart;
 
-      const rawResponse = response.choices[0]?.message?.content;
-      if (!rawResponse) {
-        throw new Error("No text response from analysis");
-      }
-
-      console.log(
-        `[analyze] API: ${apiCallMs}ms, Tokens in/out: ${response.usage?.prompt_tokens}/${response.usage?.completion_tokens}`
-      );
-
-      const totalMs = Date.now() - totalStart;
-      console.log(`[analyze] Total: ${totalMs}ms`);
-
-      const parsed = parseJsonResponse(rawResponse);
-
-      const fields = (parsed.fields as Record<string, unknown>) || {};
-      const confidence = (parsed.confidence as number) || 0;
-      const missingFields = (parsed.missingFields as string[]) || [];
-      const rawSignals =
-        (parsed.riskSignals as Array<Record<string, unknown>>) || [];
-
-      const riskSignals: RiskSignal[] = rawSignals.map((s) => ({
-        severity: (s.severity as "critical" | "major" | "minor") || "minor",
-        rule: (s.rule as string) || "unknown",
-        description: (s.description as string) || "",
-        field: s.field as string | undefined,
-        points: (s.points as number) || 0,
-      }));
-
-      const extraction: ExtractionResult = {
-        fields,
-        confidence,
-        riskSignals,
-        missingFields,
-      };
-
-      return {
-        providerId: "azure-document",
-        documentType,
-        extraction,
-        rawResponse,
-      };
-    } finally {
-      cleanup?.();
+    const rawResponse = response.choices[0]?.message?.content;
+    if (!rawResponse) {
+      throw new Error("No text response from analysis");
     }
+
+    console.log(
+      `[analyze] API: ${apiCallMs}ms, Tokens in/out: ${response.usage?.prompt_tokens}/${response.usage?.completion_tokens}`
+    );
+
+    const totalMs = Date.now() - totalStart;
+    console.log(`[analyze] Total: ${totalMs}ms`);
+
+    const parsed = parseJsonResponse(rawResponse);
+
+    const fields = (parsed.fields as Record<string, unknown>) || {};
+    const confidence = (parsed.confidence as number) || 0;
+    const missingFields = (parsed.missingFields as string[]) || [];
+    const rawSignals =
+      (parsed.riskSignals as Array<Record<string, unknown>>) || [];
+
+    const riskSignals: RiskSignal[] = rawSignals.map((s) => ({
+      severity: (s.severity as "critical" | "major" | "minor") || "minor",
+      rule: (s.rule as string) || "unknown",
+      description: (s.description as string) || "",
+      field: s.field as string | undefined,
+      points: (s.points as number) || 0,
+    }));
+
+    const extraction: ExtractionResult = {
+      fields,
+      confidence,
+      riskSignals,
+      missingFields,
+    };
+
+    return {
+      providerId: "azure-document",
+      documentType,
+      extraction,
+      rawResponse,
+    };
   },
 };
