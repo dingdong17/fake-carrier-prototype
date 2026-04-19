@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { BrandProvider } from "@/components/brand-provider";
+import { NavigationBlockerProvider } from "@/lib/navigation-blocker";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,11 +25,13 @@ export default function RootLayout({
       </head>
       <body className="flex min-h-screen flex-col" style={{ backgroundColor: "var(--brand-background)", fontFamily: "var(--brand-font-body)" }}>
         <BrandProvider>
-          <Header />
-          <main className="mx-auto w-full max-w-[1304px] flex-1 px-6 py-8">
-            {children}
-          </main>
-          <Footer />
+          <NavigationBlockerProvider>
+            <Header />
+            <main className="mx-auto w-full max-w-[1304px] xl:max-w-[1600px] 2xl:max-w-[1920px] flex-1 px-6 py-8">
+              {children}
+            </main>
+            <Footer />
+          </NavigationBlockerProvider>
         </BrandProvider>
       </body>
     </html>

@@ -2,13 +2,13 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useBlockNavigation } from "@/lib/navigation-blocker";
 import { ProgressBar } from "@/components/check/progress-bar";
 import { FileDropzone } from "@/components/check/file-dropzone";
 import { CarrierForm } from "@/components/check/carrier-form";
 import type { CarrierFormData } from "@/components/check/carrier-form";
 import { DocumentList } from "@/components/check/document-list";
 import type { UploadedDoc } from "@/components/check/document-list";
-import { ExtractionPreview } from "@/components/check/extraction-preview";
 import { AnalysisStream } from "@/components/check/analysis-stream";
 import type { AnalysisEvent } from "@/components/check/analysis-stream";
 import { DocumentChecklist } from "@/components/check/document-checklist";
@@ -18,20 +18,31 @@ import { RiskQuestions } from "@/components/check/risk-questions";
 import type { RiskAnswer } from "@/components/check/risk-questions";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { DOCUMENT_TYPES } from "@/lib/config/document-types";
 import {
   getClassifyingMessage,
   getIdentifiedMessage,
   getExtractingMessages,
   getExtractedMessage,
 } from "@/lib/terminal-messages";
+import { sanitizeErrorMessage } from "@/lib/errors/sanitize";
+import { TestSetPicker } from "@/components/check/test-set-picker";
+import { DEFAULT_TIER } from "@/lib/catalog/tier";
+import type { Tier } from "@/lib/catalog/checks";
+import { extractCarrierPrefill } from "@/lib/extraction-prefill";
 
-interface PendingExtraction {
-  documentId: string;
-  documentType: string;
-  documentTypeLabelDe: string;
-  extractedData: Record<string, unknown>;
-}
+const CARRIER_FIELD_LABELS: Record<keyof CarrierFormData, string> = {
+  carrierName: "Firmenname",
+  carrierCountry: "Land",
+  carrierVatId: "USt-IdNr.",
+  carrierEmail: "E-Mail",
+  carrierWebsite: "Webseite",
+  insurer: "Versicherer",
+  policyNumber: "Policennummer",
+  coverageStart: "Deckung von",
+  coverageEnd: "Deckung bis",
+  sumInsured: "Versicherungssumme",
+  coInsured: "Mitversicherte Unternehmen",
+};
 
 const INITIAL_FORM: CarrierFormData = {
   carrierName: "",
@@ -64,11 +75,11 @@ export default function CheckPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisEvents, setAnalysisEvents] = useState<AnalysisEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [pendingExtractions, setPendingExtractions] = useState<PendingExtraction[]>([]);
   const [analyzingDocId, setAnalyzingDocId] = useState<string | null>(null);
   const [analyzingDocName, setAnalyzingDocName] = useState<string | null>(null);
   const [riskAnswers, setRiskAnswers] = useState<RiskAnswer[]>([]);
   const [classificationLog, setClassificationLog] = useState<string[]>([]);
+  const [testSet, setTestSet] = useState<Tier>(DEFAULT_TIER);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([
     { id: "insurance-cert", labelDe: "Versicherungsnachweis", checked: false, autoDetected: false },
     { id: "is-verkehrshaftung", labelDe: "Verkehrshaftung bestätigt", checked: false, autoDetected: false },
@@ -83,8 +94,37 @@ export default function CheckPage() {
     { id: "driver-vehicle", labelDe: "Fahrer- & Fahrzeugdaten", checked: false, autoDetected: false },
   ]);
 
-  const allChecked = useMemo(() => checklist.every((item) => item.checked), [checklist]);
   const hasAnyDoc = uploadedDocs.length > 0;
+
+  const isBusy = isUploading || isClassifying || isAnalyzing;
+
+  const blockReason = useMemo(() => {
+    if (isAnalyzing) {
+      return "Die vollständige Analyse läuft. Wenn Sie die Seite jetzt verlassen, werden bereits erhobene Zwischenergebnisse verworfen.";
+    }
+    if (isClassifying) {
+      return "Ein Dokument wird gerade klassifiziert. Wenn Sie die Seite jetzt verlassen, geht der Fortschritt verloren.";
+    }
+    if (isUploading) {
+      return "Dokumente werden gerade hochgeladen. Wenn Sie die Seite jetzt verlassen, wird der Upload abgebrochen.";
+    }
+    return "";
+  }, [isUploading, isClassifying, isAnalyzing]);
+
+  const handleDiscardCheck = useCallback(async () => {
+    if (!checkId) return;
+    try {
+      await fetch(`/api/check/${checkId}/discard`, { method: "DELETE" });
+    } catch (err) {
+      console.error("Discard failed", err);
+    }
+  }, [checkId]);
+
+  useBlockNavigation({
+    isActive: isBusy,
+    reason: blockReason,
+    onDiscard: checkId ? handleDiscardCheck : undefined,
+  });
 
   const handleFormChange = useCallback(
     (field: keyof CarrierFormData, value: string) => {
@@ -106,6 +146,7 @@ export default function CheckPage() {
         if (checkId) {
           formDataUpload.append("checkId", checkId);
         }
+        formDataUpload.append("testSet", testSet);
 
         const res = await fetch("/api/upload", {
           method: "POST",
@@ -113,8 +154,8 @@ export default function CheckPage() {
         });
 
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Upload fehlgeschlagen");
+          const data = await res.json().catch(() => ({}));
+          throw new Error(sanitizeErrorMessage(data.error).message);
         }
 
         const data = await res.json();
@@ -146,8 +187,6 @@ export default function CheckPage() {
 
             if (classifyRes.ok) {
               const classifyData = await classifyRes.json();
-              const typeConfig = DOCUMENT_TYPES[classifyData.documentType];
-              const typeName = typeConfig?.labelDe || classifyData.documentType;
               const docType = classifyData.documentType as string;
 
               // Show timing analytics
@@ -211,31 +250,34 @@ export default function CheckPage() {
                   );
                 }
 
-                setPendingExtractions((prev) => [
-                  ...prev,
-                  {
-                    documentId: doc.id,
-                    documentType: classifyData.documentType,
-                    documentTypeLabelDe: typeName,
-                    extractedData: classifyData.extractedData,
-                  },
-                ]);
+                // Auto-apply extracted data into empty form fields — no user confirmation needed
+                const prefill = extractCarrierPrefill(docType, classifyData.extractedData);
+                if (Object.keys(prefill).length > 0) {
+                  const applied: string[] = [];
+                  setFormData((prev) => {
+                    const updated = { ...prev };
+                    for (const [k, v] of Object.entries(prefill)) {
+                      const key = k as keyof CarrierFormData;
+                      if (!prev[key] && v) {
+                        updated[key] = v;
+                        applied.push(CARRIER_FIELD_LABELS[key]);
+                      }
+                    }
+                    return updated;
+                  });
+                  if (applied.length > 0) {
+                    setClassificationLog((prev) => [
+                      ...prev,
+                      `Formularfelder automatisch befüllt: ${applied.join(", ")}`,
+                    ]);
+                  }
+                }
 
                 // Auto-verify: VAT + Website check
                 const companyName = classifyData.extractedData.insuredCompany as string | undefined;
                 const vatId = classifyData.extractedData.vatIdCarrier as string | undefined;
-
-                // Extract email from communication or contact info
                 const extractedEmail = (classifyData.extractedData.senderEmail || classifyData.extractedData.email || classifyData.extractedData.contactInfo?.email || "") as string;
                 const extractedWebsite = (classifyData.extractedData.website || "") as string;
-
-                // Pre-fill email/website into form if found
-                if (extractedEmail) {
-                  setFormData((prev) => prev.carrierEmail ? prev : { ...prev, carrierEmail: extractedEmail });
-                }
-                if (extractedWebsite) {
-                  setFormData((prev) => prev.carrierWebsite ? prev : { ...prev, carrierWebsite: extractedWebsite });
-                }
 
                 if (companyName || vatId || extractedEmail) {
                   setClassificationLog((prev) => [...prev, "Unternehmensprüfung wird durchgeführt..."]);
@@ -418,10 +460,21 @@ export default function CheckPage() {
                 }
               }
             } else {
-              setClassificationLog((prev) => [...prev, `"${doc.fileName}": Klassifizierung fehlgeschlagen`]);
+              const errData = await classifyRes.json().catch(() => ({}));
+              const safe = sanitizeErrorMessage(errData.error);
+              setClassificationLog((prev) => [
+                ...prev,
+                `"${doc.fileName}": Klassifizierung fehlgeschlagen — ${safe.message}`,
+              ]);
             }
-          } catch {
-            setClassificationLog((prev) => [...prev, `"${doc.fileName}": Fehler bei der Analyse`]);
+          } catch (err) {
+            const safe = sanitizeErrorMessage(
+              err instanceof Error ? err.message : null
+            );
+            setClassificationLog((prev) => [
+              ...prev,
+              `"${doc.fileName}": Fehler bei der Analyse — ${safe.message}`,
+            ]);
           }
         }
 
@@ -433,31 +486,14 @@ export default function CheckPage() {
         setIsClassifying(false);
         setAnalyzingDocId(null);
         setAnalyzingDocName(null);
-        setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
+        const safe = sanitizeErrorMessage(
+          err instanceof Error ? err.message : null
+        );
+        setError(safe.message);
       }
     },
-    [checkId]
+    [checkId, testSet]
   );
-
-  const handleAcceptExtraction = useCallback(
-    (prefill: Partial<CarrierFormData>) => {
-      setFormData((prev) => {
-        const updated = { ...prev };
-        for (const [key, value] of Object.entries(prefill)) {
-          if (value && !prev[key as keyof CarrierFormData]) {
-            updated[key as keyof CarrierFormData] = value;
-          }
-        }
-        return updated;
-      });
-      setPendingExtractions((prev) => prev.slice(1));
-    },
-    []
-  );
-
-  const handleDismissExtraction = useCallback(() => {
-    setPendingExtractions((prev) => prev.slice(1));
-  }, []);
 
   const handleRiskAnswer = useCallback((questionId: string, answer: "yes" | "no" | "unknown") => {
     setRiskAnswers((prev) => {
@@ -467,14 +503,6 @@ export default function CheckPage() {
       }
       return [...prev, { questionId, answer, autoDetected: false }];
     });
-  }, []);
-
-  const handleProceedToReview = useCallback(() => {
-    setStep(2);
-  }, []);
-
-  const handleBackToUpload = useCallback(() => {
-    setStep(1);
   }, []);
 
   const handleStartFullAnalysis = useCallback(async () => {
@@ -510,8 +538,8 @@ export default function CheckPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Analyse fehlgeschlagen");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(sanitizeErrorMessage(data.error).message);
       }
 
       const reader = res.body?.getReader();
@@ -542,7 +570,7 @@ export default function CheckPage() {
 
               if (data.type === "error") {
                 setIsAnalyzing(false);
-                setError(data.message || "Analyse fehlgeschlagen");
+                setError(sanitizeErrorMessage(data.message).message);
               }
             } catch {
               // Skip malformed SSE
@@ -554,12 +582,16 @@ export default function CheckPage() {
       setIsAnalyzing(false);
     } catch (err) {
       setIsAnalyzing(false);
-      setError(err instanceof Error ? err.message : "Analyse fehlgeschlagen");
+      const safe = sanitizeErrorMessage(
+        err instanceof Error ? err.message : null
+      );
+      setError(safe.message);
     }
   }, [formData, checkId, router]);
 
-  // Map step to progress bar (4 progress bar steps)
-  const progressStep = step === 1 ? 1 : step === 2 ? 2 : step === 3 ? 3 : step === 4 ? 4 : 1;
+  // Internal step mirrors the 4-stage progress bar:
+  // 1 = data entry, 2 = context questions, 3 = full analysis, 4 = complete/redirect
+  const progressStep = step;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -575,46 +607,90 @@ export default function CheckPage() {
         </div>
       )}
 
-      {/* Step 1: Upload documents — user stays here until they decide to proceed */}
+      {/* Merged step 1: data entry (manual form + document upload, combined) */}
       {step === 1 && (
         <div className="space-y-6">
+          {/* German how-to-use help block */}
+          <div className="rounded-xl border border-ec-info/30 bg-ec-info/5 p-4 text-sm text-ec-grey-80">
+            <h2 className="mb-2 font-semibold text-ec-dark-blue">
+              Zwei Wege — beliebig kombinierbar
+            </h2>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                <strong>Manuell:</strong> Tragen Sie die Frachtführer-Daten direkt ins Formular ein.
+              </li>
+              <li>
+                <strong>Automatisch:</strong> Laden Sie Dokumente hoch — die KI erkennt den Typ und füllt leere Felder automatisch.
+              </li>
+              <li>
+                <strong>Gemischt:</strong> Schreiben Sie einige Felder und laden Sie Dokumente für den Rest hoch. Bereits ausgefüllte Felder bleiben unverändert; Sie können jederzeit nachträglich korrigieren.
+              </li>
+            </ul>
+            <p className="mt-2 text-xs text-ec-grey-70">
+              Für die Analyse wird mindestens ein hochgeladenes Dokument benötigt.
+            </p>
+          </div>
+
+          {!hasAnyDoc && (
+            <TestSetPicker value={testSet} onChange={setTestSet} />
+          )}
+
           <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <h2 className="text-lg font-semibold text-ec-dark-blue">
-                    Dokumente hochladen
-                  </h2>
-                  <p className="mt-1 text-sm text-ec-grey-70">
-                    Laden Sie die Dokumente des Frachtführers hoch. Die KI erkennt automatisch den Dokumenttyp und extrahiert relevante Daten. Sie können mehrfach Dokumente hochladen.
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <FileDropzone
-                      onFilesSelected={handleFilesSelected}
-                      disabled={isUploading || isClassifying}
+              {/* Form + upload side-by-side at lg+, stacked below */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Carrier form — always visible, fills from upload or manual entry */}
+                <Card>
+                  <CardHeader>
+                    <h2 className="text-lg font-semibold text-ec-dark-blue">
+                      Frachtführer-Daten
+                    </h2>
+                    <p className="mt-1 text-sm text-ec-grey-70">
+                      Werden aus hochgeladenen Dokumenten automatisch befüllt. Sie können jedes Feld manuell überschreiben oder korrigieren.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <CarrierForm
+                      data={formData}
+                      onChange={handleFormChange}
                     />
-                    {isUploading && (
-                      <div className="flex items-center gap-2 text-sm text-ec-info">
-                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-info border-t-transparent" />
-                        Dateien werden hochgeladen...
-                      </div>
-                    )}
-                    {isClassifying && (
-                      <div className="flex items-center gap-2 text-sm text-ec-dark-blue">
-                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-dark-blue border-t-transparent" />
-                        KI analysiert Dokument...
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              {/* AI Terminal — live activity feed */}
-              <AiTerminal lines={classificationLog} isActive={isClassifying} activeDocName={analyzingDocName} />
+                {/* Document upload */}
+                <Card>
+                  <CardHeader>
+                    <h2 className="text-lg font-semibold text-ec-dark-blue">
+                      Dokumente hochladen
+                    </h2>
+                    <p className="mt-1 text-sm text-ec-grey-70">
+                      Laden Sie Versicherungsnachweis, Transportlizenz, Briefkopf oder weitere Unterlagen hoch. Die KI erkennt den Typ automatisch und extrahiert relevante Felder.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <FileDropzone
+                        onFilesSelected={handleFilesSelected}
+                        disabled={isUploading || isClassifying}
+                      />
+                      {isUploading && (
+                        <div className="flex items-center gap-2 text-sm text-ec-info">
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-info border-t-transparent" />
+                          Dateien werden hochgeladen...
+                        </div>
+                      )}
+                      {isClassifying && (
+                        <div className="flex items-center gap-2 text-sm text-ec-dark-blue">
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ec-dark-blue border-t-transparent" />
+                          KI analysiert Dokument...
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-              {/* Document list */}
+              {/* Document list — full width of the main column, below the two cards */}
               {uploadedDocs.length > 0 && (
                 <Card>
                   <CardContent>
@@ -623,92 +699,65 @@ export default function CheckPage() {
                 </Card>
               )}
 
-              {/* Pending extractions — shown inline on step 1 */}
-              {pendingExtractions.length > 0 && (
-                <ExtractionPreview
-                  documentType={pendingExtractions[0].documentType}
-                  documentTypeLabelDe={pendingExtractions[0].documentTypeLabelDe}
-                  extractedData={pendingExtractions[0].extractedData}
-                  onAccept={handleAcceptExtraction}
-                  onDismiss={handleDismissExtraction}
-                  disabled={isClassifying}
-                />
-              )}
+              {/* Live analysis terminal — full width of the main column */}
+              <AiTerminal
+                lines={classificationLog}
+                isActive={isClassifying}
+                activeDocName={analyzingDocName}
+              />
             </div>
 
-            {/* Checklist sidebar */}
+            {/* Sidebar: checklist */}
             <div className="space-y-4">
               <Card className="h-fit">
                 <DocumentChecklist items={checklist} />
               </Card>
-
-              {/* All checks green — congratulate and encourage to proceed */}
-              {allChecked && (
-                <Card className="border-ec-success/30 bg-ec-success/5">
-                  <div className="space-y-3 text-center">
-                    <div className="text-3xl">🎉</div>
-                    <p className="text-sm font-semibold text-ec-success">
-                      Hervorragend! Alle Dokumente liegen vor.
-                    </p>
-                    <p className="text-xs text-ec-grey-70">
-                      Sie haben eine optimale Grundlage für die Analyse geschaffen. Fahren Sie jetzt mit der Datenprüfung fort.
-                    </p>
-                    <Button onClick={handleProceedToReview} size="lg" className="w-full">
-                      Weiter zur Datenprüfung
-                    </Button>
-                  </div>
-                </Card>
-              )}
             </div>
           </div>
 
-          {/* Proceed button — always available once at least one doc is uploaded */}
-          {hasAnyDoc && !isClassifying && !allChecked && (
-            <div className="flex justify-end">
-              <Button onClick={handleProceedToReview} variant={allChecked ? "primary" : "outline"}>
-                Weiter zur Datenprüfung
-              </Button>
-            </div>
-          )}
+          {/* Continue-to-questions footer */}
+          <div className="flex items-center justify-end gap-3 border-t border-ec-medium-grey pt-4">
+            {!hasAnyDoc && (
+              <span className="text-xs text-ec-grey-70">
+                Mindestens ein Dokument erforderlich
+              </span>
+            )}
+            <Button
+              onClick={() => setStep(2)}
+              size="lg"
+              disabled={!hasAnyDoc || isUploading || isClassifying}
+            >
+              Weiter zu Kontextfragen
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* Step 2: Review extracted data & carrier form */}
+      {/* Step 2: Behavioral & context questions (pre-filled from first analysis) */}
       {step === 2 && (
         <div className="space-y-6">
-          {/* AI Terminal — shows what was done */}
-          <AiTerminal lines={classificationLog} isActive={false} />
-
-          <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-            <Card>
-              <CardHeader>
-                <h2 className="text-lg font-semibold text-ec-dark-blue">
-                  Daten prüfen und ergänzen
-                </h2>
-                <p className="mt-1 text-sm text-ec-grey-70">
-                  Prüfen Sie die extrahierten Daten und ergänzen oder korrigieren Sie diese bei Bedarf.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <CarrierForm
-                  data={formData}
-                  onChange={handleFormChange}
-                />
-              </CardContent>
-            </Card>
-            <Card className="h-fit">
-              <DocumentChecklist items={checklist} />
-            </Card>
+          <div className="rounded-xl border border-ec-info/30 bg-ec-info/5 p-4 text-sm text-ec-grey-80">
+            <h2 className="mb-2 font-semibold text-ec-dark-blue">
+              Ergänzende Fragen zum Frachtführer
+            </h2>
+            <p>
+              Hinweise, die die KI bereits aus den hochgeladenen Dokumenten erkannt hat, sind
+              vorausgefüllt und mit <strong>KI</strong> markiert. Ergänzen Sie die übrigen Fragen
+              aus Ihrer Erfahrung — die Antworten fließen in die vollständige Risikobewertung ein.
+            </p>
           </div>
 
-          {/* Behavioral risk questions */}
           <RiskQuestions answers={riskAnswers} onAnswer={handleRiskAnswer} />
 
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" onClick={handleBackToUpload}>
-              Zurück — weitere Dokumente hochladen
+          <div className="flex items-center justify-between gap-3 border-t border-ec-medium-grey pt-4">
+            <Button variant="ghost" onClick={() => setStep(1)}>
+              Zurück zu Daten
             </Button>
-            <Button onClick={handleStartFullAnalysis} size="lg">
+            <Button
+              onClick={handleStartFullAnalysis}
+              size="lg"
+              disabled={isAnalyzing}
+            >
               Vollständige Analyse starten
             </Button>
           </div>
