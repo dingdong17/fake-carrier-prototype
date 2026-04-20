@@ -1,5 +1,5 @@
 // src/lib/auth/session.test.ts
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import type { Session } from "next-auth";
 
 vi.mock("@/lib/auth/config", () => ({ auth: vi.fn() }));
@@ -23,23 +23,23 @@ describe("requireRole", () => {
   beforeEach(() => vi.resetAllMocks());
 
   it("returns the session user when role matches", async () => {
-    (auth as unknown as vi.Mock).mockResolvedValue(mkSession({ role: "admin" }));
+    (auth as unknown as Mock).mockResolvedValue(mkSession({ role: "admin" }));
     const u = await requireRole("admin");
     expect(u.role).toBe("admin");
   });
 
   it("throws when no session", async () => {
-    (auth as unknown as vi.Mock).mockResolvedValue(null);
+    (auth as unknown as Mock).mockResolvedValue(null);
     await expect(requireRole("admin")).rejects.toThrow(/not authenticated/i);
   });
 
   it("throws when role mismatch", async () => {
-    (auth as unknown as vi.Mock).mockResolvedValue(mkSession({ role: "client" }));
+    (auth as unknown as Mock).mockResolvedValue(mkSession({ role: "client" }));
     await expect(requireRole("admin")).rejects.toThrow(/forbidden/i);
   });
 
   it("accepts any of multiple roles", async () => {
-    (auth as unknown as vi.Mock).mockResolvedValue(mkSession({ role: "broker" }));
+    (auth as unknown as Mock).mockResolvedValue(mkSession({ role: "broker" }));
     const u = await requireRole(["broker", "admin"] as Role[]);
     expect(u.role).toBe("broker");
   });
