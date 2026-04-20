@@ -1,14 +1,5 @@
-import { redirect } from "next/navigation";
-
 function isSafeCallbackPath(u: string): boolean {
   return /^\/api\/auth\/callback\/[a-z]+\?/.test(u);
-}
-
-async function completeSignIn(formData: FormData) {
-  "use server";
-  const url = formData.get("u");
-  if (typeof url !== "string" || !isSafeCallbackPath(url)) return;
-  redirect(url);
 }
 
 export default async function ConfirmPage({
@@ -40,7 +31,7 @@ export default async function ConfirmPage({
       <p className="mb-6 text-sm text-ec-grey-80">
         Klicken Sie auf die Schaltfläche, um Ihre Anmeldung abzuschließen.
       </p>
-      <form action={completeSignIn}>
+      <form method="POST" action="/auth/confirm/complete">
         <input type="hidden" name="u" value={u} />
         <button
           type="submit"

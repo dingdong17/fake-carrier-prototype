@@ -8,6 +8,7 @@ const PUBLIC_EXACT = new Set([
   "/login",
   "/login/check-email",
   "/auth/confirm",
+  "/auth/confirm/complete",
 ]);
 const PUBLIC_PREFIX = ["/api/auth/", "/_next/", "/favicon"];
 

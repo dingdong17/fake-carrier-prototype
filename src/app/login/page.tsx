@@ -2,7 +2,21 @@ import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 
-export default async function LoginPage() {
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  Verification:
+    "Ihr Login-Link ist nicht mehr gültig (bereits verwendet oder abgelaufen). Bitte fordern Sie einen neuen an.",
+  AccessDenied:
+    "Zugang verweigert. Für Ihre E-Mail-Adresse wurde kein Konto freigeschaltet.",
+  Configuration:
+    "Auth-Konfigurationsfehler. Bitte kontaktieren Sie den Administrator.",
+  Default: "Beim Anmelden ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.",
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const session = await auth();
   if (session?.user) {
     if (session.user.role === "admin") redirect("/admin");
@@ -12,6 +26,11 @@ export default async function LoginPage() {
     }
     redirect("/");
   }
+
+  const { error } = await searchParams;
+  const errorMessage = error
+    ? (AUTH_ERROR_MESSAGES[error] ?? AUTH_ERROR_MESSAGES.Default)
+    : null;
 
   return (
     <main className="mx-auto max-w-md px-4 py-16">
@@ -23,6 +42,12 @@ export default async function LoginPage() {
         einmaligen Login-Link. Zugang wird vom Administrator freigeschaltet —
         falls Sie noch keinen haben, kontaktieren Sie Ihren Broker.
       </p>
+      {errorMessage && (
+        <div className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+          {errorMessage}
+          <span className="ml-1 font-mono text-xs text-red-600">[{error}]</span>
+        </div>
+      )}
       <LoginForm />
     </main>
   );
