@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useBlockNavigation } from "@/lib/navigation-blocker";
 import { ProgressBar } from "@/components/check/progress-bar";
 import { FileDropzone } from "@/components/check/file-dropzone";
@@ -60,6 +60,8 @@ const INITIAL_FORM: CarrierFormData = {
 
 export default function CheckPage() {
   const router = useRouter();
+  const params = useParams<{ slug: string }>();
+  const slug = params.slug;
 
   // Flow steps:
   // 1 = upload documents (user stays here, uploads multiple docs, sees checklist fill up)
@@ -147,6 +149,7 @@ export default function CheckPage() {
           formDataUpload.append("checkId", checkId);
         }
         formDataUpload.append("testSet", testSet);
+        formDataUpload.append("clientSlug", slug);
 
         const res = await fetch("/api/upload", {
           method: "POST",
@@ -492,7 +495,7 @@ export default function CheckPage() {
         setError(safe.message);
       }
     },
-    [checkId, testSet]
+    [checkId, testSet, slug]
   );
 
   const handleRiskAnswer = useCallback((questionId: string, answer: "yes" | "no" | "unknown") => {
@@ -522,6 +525,7 @@ export default function CheckPage() {
       if (formData.carrierCountry) updateForm.append("carrierCountry", formData.carrierCountry);
       if (formData.carrierVatId) updateForm.append("carrierVatId", formData.carrierVatId);
       updateForm.append("files", new Blob([]), "");
+      updateForm.append("clientSlug", slug);
       await fetch("/api/upload", { method: "POST", body: updateForm }).catch(() => {});
     }
 
@@ -565,7 +569,7 @@ export default function CheckPage() {
               if (data.type === "completed") {
                 setStep(4);
                 setIsAnalyzing(false);
-                setTimeout(() => router.push(`/results/${checkId}`), 1500);
+                setTimeout(() => router.push(`/client/${slug}/results/${checkId}`), 1500);
               }
 
               if (data.type === "error") {
@@ -587,7 +591,7 @@ export default function CheckPage() {
       );
       setError(safe.message);
     }
-  }, [formData, checkId, router]);
+  }, [formData, checkId, router, slug]);
 
   // Internal step mirrors the 4-stage progress bar:
   // 1 = data entry, 2 = context questions, 3 = full analysis, 4 = complete/redirect
