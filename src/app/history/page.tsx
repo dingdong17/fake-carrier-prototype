@@ -17,8 +17,8 @@ const recBadge: Record<
   reject: { variant: "critical", label: "Ablehnen" },
 };
 
-export default function HistoryPage() {
-  const allChecks = db
+export default async function HistoryPage() {
+  const allChecks = await db
     .select()
     .from(checks)
     .orderBy(desc(checks.createdAt))

@@ -1,10 +1,8 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 import { backlogItems } from "./schema";
 import { generateId, formatBacklogNumber } from "../utils";
-import { existsSync, mkdirSync } from "fs";
-import path from "path";
 
 const SEED_ITEMS = [
   { title: "External registry API: VIES (EU VAT validation)", priority: "high" as const, description: "Integrate VIES API to auto-validate VAT numbers. Provider pattern already in place." },
@@ -41,19 +39,11 @@ const SEED_ITEMS = [
 ];
 
 async function seed() {
-  const dbDir = path.join(process.cwd(), "data");
-  if (!existsSync(dbDir)) {
-    mkdirSync(dbDir, { recursive: true });
-  }
+  const client = createClient({ url: "file:./data/fakecarrier.db" });
+  const db = drizzle(client, { schema });
 
-  const dbPath = path.join(dbDir, "fakecarrier.db");
-  const sqlite = new Database(dbPath);
-  sqlite.pragma("journal_mode = WAL");
-  const db = drizzle(sqlite, { schema });
-
-  // Create tables if they don't exist
-  sqlite.exec(`
-    CREATE TABLE IF NOT EXISTS checks (
+  const createStatements = [
+    `CREATE TABLE IF NOT EXISTS checks (
       id TEXT PRIMARY KEY,
       check_number TEXT NOT NULL UNIQUE,
       carrier_name TEXT NOT NULL,
@@ -67,8 +57,8 @@ async function seed() {
       test_set TEXT NOT NULL DEFAULT 'medium',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS documents (
+    )`,
+    `CREATE TABLE IF NOT EXISTS documents (
       id TEXT PRIMARY KEY,
       check_id TEXT NOT NULL REFERENCES checks(id),
       document_type TEXT NOT NULL,
@@ -81,16 +71,16 @@ async function seed() {
       confidence REAL,
       status TEXT NOT NULL DEFAULT 'uploaded',
       created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS chat_messages (
+    )`,
+    `CREATE TABLE IF NOT EXISTS chat_messages (
       id TEXT PRIMARY KEY,
       check_id TEXT NOT NULL REFERENCES checks(id),
       role TEXT NOT NULL,
       content TEXT NOT NULL,
       metadata TEXT,
       created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS backlog_items (
+    )`,
+    `CREATE TABLE IF NOT EXISTS backlog_items (
       id TEXT PRIMARY KEY,
       item_number TEXT NOT NULL UNIQUE,
       title TEXT NOT NULL,
@@ -100,19 +90,22 @@ async function seed() {
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS feedback (
+    )`,
+    `CREATE TABLE IF NOT EXISTS feedback (
       id TEXT PRIMARY KEY,
       check_id TEXT REFERENCES checks(id),
       category TEXT NOT NULL,
       comment TEXT NOT NULL,
       page TEXT,
       created_at TEXT NOT NULL
-    );
-  `);
+    )`,
+  ];
 
-  // Check if backlog already seeded
-  const existing = db.select().from(backlogItems).all();
+  for (const stmt of createStatements) {
+    await client.execute(stmt);
+  }
+
+  const existing = await db.select().from(backlogItems).all();
   if (existing.length > 0) {
     console.log("Backlog already seeded, skipping.");
     return;
@@ -121,7 +114,7 @@ async function seed() {
   const now = new Date().toISOString();
   for (let i = 0; i < SEED_ITEMS.length; i++) {
     const item = SEED_ITEMS[i];
-    db.insert(backlogItems).values({
+    await db.insert(backlogItems).values({
       id: generateId(),
       itemNumber: formatBacklogNumber(i + 1),
       title: item.title,
@@ -137,4 +130,7 @@ async function seed() {
   console.log(`Seeded ${SEED_ITEMS.length} backlog items.`);
 }
 
-seed();
+seed().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

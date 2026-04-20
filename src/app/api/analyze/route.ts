@@ -15,6 +15,8 @@ import {
 } from "@/lib/analysis/pipeline";
 import type { ProviderResult } from "@/lib/analysis/providers/types";
 
+export const maxDuration = 180;
+
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
 
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const check = db
+  const check = await db
     .select()
     .from(checks)
     .where(eq(checks.id, checkId))
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
 
       try {
         // Load documents
-        const checkDocuments = db
+        const checkDocuments = await db
           .select()
           .from(documents)
           .where(eq(documents.checkId, checkId))
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Update check status to analyzing
-        db.update(checks)
+        await db.update(checks)
           .set({ status: "analyzing", updatedAt: new Date().toISOString() })
           .where(eq(checks.id, checkId))
           .run();
@@ -120,7 +122,7 @@ export async function POST(request: NextRequest) {
                 doc.mimeType
               );
 
-              db.update(documents)
+              await db.update(documents)
                 .set({ documentType: classification.documentType })
                 .where(eq(documents.id, doc.id))
                 .run();
@@ -146,7 +148,7 @@ export async function POST(request: NextRequest) {
               step: "analyze",
             });
 
-            db.update(documents)
+            await db.update(documents)
               .set({ status: "analyzing" })
               .where(eq(documents.id, doc.id))
               .run();
@@ -160,7 +162,7 @@ export async function POST(request: NextRequest) {
 
             documentResults.push(result);
 
-            db.update(documents)
+            await db.update(documents)
               .set({
                 status: "analyzed",
                 extractedFields: result.extraction.fields as Record<
@@ -183,7 +185,7 @@ export async function POST(request: NextRequest) {
               confidence: result.extraction.confidence,
             });
           } catch {
-            db.update(documents)
+            await db.update(documents)
               .set({ status: "error" })
               .where(eq(documents.id, doc.id))
               .run();
@@ -270,7 +272,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Step 5: Update DB with final results
-        db.update(checks)
+        await db.update(checks)
           .set({
             riskScore,
             confidenceLevel,

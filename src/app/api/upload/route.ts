@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFileSync, mkdirSync, existsSync } from "fs";
 import path from "path";
 import { db } from "@/lib/db";
 import { documents, checks } from "@/lib/db/schema";
 import { generateId, formatCheckNumber } from "@/lib/utils";
 import { eq, sql } from "drizzle-orm";
+import { getStorage } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     if (checkId) {
       // Existing check — verify it exists
-      const existing = db
+      const existing = await db
         .select()
         .from(checks)
         .where(eq(checks.id, checkId))
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 
       // Update carrier info if provided
       if (carrierName) {
-        db.update(checks)
+        await db.update(checks)
           .set({
             carrierName,
             carrierCountry: carrierCountry || existing.carrierCountry,
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Create a new check — carrier name can be filled later (e.g. from AI extraction)
       resolvedCheckId = generateId();
-      const result = db
+      const result = await db
         .select({ maxNum: sql<string>`max(check_number)` })
         .from(checks)
         .get();
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       const seq = (isNaN(lastNum) ? 0 : lastNum) + 1;
       checkNumber = formatCheckNumber(seq);
 
-      db.insert(checks)
+      await db.insert(checks)
         .values({
           id: resolvedCheckId,
           checkNumber,
@@ -84,12 +84,6 @@ export async function POST(request: NextRequest) {
         .run();
     }
 
-    // Ensure uploads directory exists
-    const uploadDir = path.join(process.cwd(), "uploads", resolvedCheckId);
-    if (!existsSync(uploadDir)) {
-      mkdirSync(uploadDir, { recursive: true });
-    }
-
     // Save files and create document records
     const savedDocuments: Array<{
       id: string;
@@ -100,25 +94,30 @@ export async function POST(request: NextRequest) {
       status: string;
     }> = [];
 
+    const storage = getStorage();
+
     for (const file of files) {
       const docId = generateId();
       const ext = path.extname(file.name) || ".bin";
       const savedFileName = `${docId}${ext}`;
-      const filePath = path.join(uploadDir, savedFileName);
+      const key = `checks/${resolvedCheckId}/${savedFileName}`;
 
-      // Read file content and write to disk
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      writeFileSync(filePath, buffer);
 
-      // Create document record
-      db.insert(documents)
+      const stored = await storage.put(
+        key,
+        buffer,
+        file.type || "application/octet-stream"
+      );
+
+      await db.insert(documents)
         .values({
           id: docId,
           checkId: resolvedCheckId,
           documentType: "unknown",
           fileName: file.name,
-          filePath,
+          filePath: stored.key,
           mimeType: file.type || "application/octet-stream",
           status: "uploaded",
         })
@@ -127,7 +126,7 @@ export async function POST(request: NextRequest) {
       savedDocuments.push({
         id: docId,
         fileName: file.name,
-        filePath,
+        filePath: stored.key,
         mimeType: file.type || "application/octet-stream",
         documentType: "unknown",
         status: "uploaded",

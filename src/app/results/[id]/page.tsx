@@ -7,10 +7,27 @@ import { RecommendationBanner } from "@/components/results/recommendation-banner
 import { RiskConfidenceChart } from "@/components/results/risk-confidence-chart";
 import { NextSteps } from "@/components/results/next-steps";
 import { MissingDocs } from "@/components/results/missing-docs";
+import { ProvidedDocs } from "@/components/results/provided-docs";
 import { GuidanceTier } from "@/components/results/guidance-tier";
 import { DocumentCard } from "@/components/results/document-card";
 import { ChatPanel } from "@/components/results/chat-panel";
 import { FeedbackPrompt } from "@/components/feedback/feedback-prompt";
+import { extractCarrierPrefill } from "@/lib/extraction-prefill";
+import type { CarrierFormData } from "@/components/check/carrier-form";
+
+const SUMMARY_FIELDS: Array<{ key: keyof CarrierFormData; label: string; suffix?: string }> = [
+  { key: "carrierName", label: "Firmenname" },
+  { key: "carrierCountry", label: "Land" },
+  { key: "carrierVatId", label: "USt-IdNr." },
+  { key: "carrierWebsite", label: "Webseite" },
+  { key: "carrierEmail", label: "E-Mail" },
+  { key: "insurer", label: "Versicherer" },
+  { key: "policyNumber", label: "Policennummer" },
+  { key: "sumInsured", label: "Versicherungssumme", suffix: " EUR" },
+  { key: "coverageStart", label: "Deckung von" },
+  { key: "coverageEnd", label: "Deckung bis" },
+  { key: "coInsured", label: "Mitversichert" },
+];
 
 interface CheckData {
   id: string;
@@ -189,6 +206,29 @@ export default function ResultsPage() {
 
   const providedTypes = [...new Set(documents.map((d) => d.documentType).filter((t) => t !== "unknown"))];
   const explanation = getExplanation(recommendation, riskScore, confidenceLevel);
+
+  const mergedPrefill: Partial<CarrierFormData> = {};
+  for (const doc of documents) {
+    const fields = (doc.extractedFields ?? {}) as Record<string, unknown>;
+    const p = extractCarrierPrefill(doc.documentType, fields);
+    for (const [k, v] of Object.entries(p)) {
+      const key = k as keyof CarrierFormData;
+      if (!mergedPrefill[key] && v) mergedPrefill[key] = v as string;
+    }
+  }
+  const summary: Record<keyof CarrierFormData, string> = {
+    carrierName: check.carrierName,
+    carrierCountry: check.carrierCountry ?? mergedPrefill.carrierCountry ?? "",
+    carrierVatId: check.carrierVatId ?? mergedPrefill.carrierVatId ?? "",
+    carrierEmail: mergedPrefill.carrierEmail ?? "",
+    carrierWebsite: mergedPrefill.carrierWebsite ?? "",
+    insurer: mergedPrefill.insurer ?? "",
+    policyNumber: mergedPrefill.policyNumber ?? "",
+    sumInsured: mergedPrefill.sumInsured ?? "",
+    coverageStart: mergedPrefill.coverageStart ?? "",
+    coverageEnd: mergedPrefill.coverageEnd ?? "",
+    coInsured: mergedPrefill.coInsured ?? "",
+  };
   const createdDate = new Date(check.createdAt).toLocaleDateString("de-DE", {
     year: "numeric",
     month: "2-digit",
@@ -223,6 +263,31 @@ export default function ResultsPage() {
             </svg>
             PDF Report herunterladen
           </button>
+        </div>
+
+        {/* Geprüfte Daten — what the score is based on */}
+        <div className="mb-6 rounded-xl border border-ec-medium-grey bg-white p-6 shadow-sm">
+          <h3 className="text-sm font-semibold text-ec-grey-80 mb-4 font-barlow">
+            Geprüfte Daten
+          </h3>
+          <dl className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
+            {SUMMARY_FIELDS.map(({ key, label, suffix }) => {
+              const val = summary[key];
+              if (!val) return null;
+              return (
+                <div
+                  key={key}
+                  className="flex justify-between gap-4 border-b border-ec-light-grey py-1.5"
+                >
+                  <dt className="text-sm text-ec-grey-70">{label}</dt>
+                  <dd className="text-sm font-medium text-ec-grey-80 text-right whitespace-pre-line">
+                    {val}
+                    {suffix ?? ""}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
         </div>
 
         {/* Recommendation */}
@@ -298,6 +363,12 @@ export default function ResultsPage() {
           </div>
           <div className="space-y-4">
             <NextSteps steps={DEFAULT_NEXT_STEPS} />
+            <ProvidedDocs
+              documents={documents.map((d) => ({
+                documentType: d.documentType,
+                fileName: d.fileName,
+              }))}
+            />
             <MissingDocs providedTypes={providedTypes} />
           </div>
         </div>

@@ -1,7 +1,4 @@
-import { readFileSync, statSync, mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import { execSync } from "child_process";
+import { extractText } from "unpdf";
 import { SYSTEM_PROMPT } from "../prompts/system";
 import { CLASSIFY_PROMPT } from "../prompts/classify";
 import { INSURANCE_CERT_PROMPT } from "../prompts/insurance-cert";
@@ -11,6 +8,7 @@ import { FREIGHT_PROFILE_PROMPT } from "../prompts/freight-profile";
 import { COMMUNICATION_PROMPT } from "../prompts/communication";
 import { DRIVER_VEHICLE_PROMPT } from "../prompts/driver-vehicle";
 import { getAzureClient, ANALYSIS_DEPLOYMENT } from "@/lib/azure-openai";
+import { getStorage } from "@/lib/storage";
 import type {
   AnalysisProvider,
   ProviderResult,
@@ -51,72 +49,24 @@ function normalizeImageMime(mimeType: string): string {
   return mimeType;
 }
 
-const PDF_SIZE_THRESHOLD_KB = 100;
-const RASTER_DPI = 150;
-const RASTER_MAX_PAGES = 3;
-
-async function extractPdfText(
-  filePath: string,
+export async function extractPdfText(
+  buffer: Buffer,
   maxPages: number = 5
 ): Promise<string | null> {
   try {
-    const script = `
-from pypdf import PdfReader
-reader = PdfReader("${filePath.replace(/"/g, '\\"')}")
-pages = min(${maxPages}, len(reader.pages))
-for i in range(pages):
-    text = reader.pages[i].extract_text()
-    if text:
-        print(f"--- SEITE {i+1} von {len(reader.pages)} ---")
-        print(text)
-`;
-    const result = execSync(`python3 -c '${script.replace(/'/g, "'\\''")}'`, {
-      timeout: 10000,
-      encoding: "utf-8",
+    const result = await extractText(new Uint8Array(buffer), {
+      mergePages: false,
     });
-
-    if (result && result.trim().length > 100) {
-      console.log(
-        `[pdf-text] Extracted ${result.length} chars (first ${maxPages} pages)`
-      );
-      return result;
-    }
-    return null;
-  } catch (err) {
-    console.log(`[pdf-text] Text extraction failed, falling back: ${err}`);
-    return null;
-  }
-}
-
-function rasterizePdf(
-  filePath: string,
-  dpi: number = RASTER_DPI,
-  maxPages: number = RASTER_MAX_PAGES
-): { dir: string; files: string[] } {
-  const dir = mkdtempSync(join(tmpdir(), "fc-pdf-"));
-  const prefix = join(dir, "page");
-  try {
-    execSync(
-      `pdftoppm -jpeg -r ${dpi} -f 1 -l ${maxPages} "${filePath.replace(/"/g, '\\"')}" "${prefix}"`,
-      { timeout: 15000 }
+    const firstPages = result.text.slice(0, maxPages);
+    const text = firstPages.join("\n\n").trim();
+    if (!text || text.length < 100) return null;
+    console.log(
+      `[pdf-text] Extracted ${text.length} chars from ${result.totalPages} pages (limit ${maxPages})`
     );
-    const files: string[] = [];
-    for (let i = 1; i <= maxPages; i++) {
-      const f = `${prefix}-${i}.jpg`;
-      try {
-        statSync(f);
-        files.push(f);
-      } catch {
-        break;
-      }
-    }
-    if (files.length === 0) {
-      throw new Error("pdftoppm produced no output files");
-    }
-    return { dir, files };
+    return text;
   } catch (err) {
-    rmSync(dir, { recursive: true, force: true });
-    throw err;
+    console.log(`[pdf-text] unpdf failed: ${err}`);
+    return null;
   }
 }
 
@@ -125,43 +75,24 @@ type TextContent = { type: "text"; text: string };
 type UserContent = ImageContent | TextContent;
 
 async function buildSmartContent(
-  filePath: string,
+  buffer: Buffer,
   mimeType: string
-): Promise<{ content: UserContent[]; cleanup?: () => void }> {
-  const fileSizeKB = statSync(filePath).size / 1024;
-
+): Promise<{ content: UserContent[] }> {
   if (isPdf(mimeType)) {
-    if (fileSizeKB > PDF_SIZE_THRESHOLD_KB) {
-      const text = await extractPdfText(filePath, 5);
-      if (text) {
-        console.log(
-          `[smart-content] Text-extraction for ${Math.round(fileSizeKB)}KB PDF (${text.length} chars, ~${Math.round(text.length / 4)} tokens)`
-        );
-        return {
-          content: [
-            { type: "text", text: `[Dokumentinhalt - Erste Seiten]\n\n${text}` },
-          ],
-        };
-      }
-    }
-    const { dir, files } = rasterizePdf(filePath);
-    const blocks: UserContent[] = files.map((p) => {
-      const b64 = readFileSync(p).toString("base64");
+    const text = await extractPdfText(buffer, 5);
+    if (text) {
       return {
-        type: "image_url",
-        image_url: { url: `data:image/jpeg;base64,${b64}` },
+        content: [
+          { type: "text", text: `[Dokumentinhalt - Erste Seiten]\n\n${text}` },
+        ],
       };
-    });
-    console.log(
-      `[smart-content] Rasterized ${Math.round(fileSizeKB)}KB PDF to ${files.length} JPEG(s) @${RASTER_DPI}dpi`
+    }
+    throw new Error(
+      "PDF-Textextraktion fehlgeschlagen. Bitte Dokument als Bild hochladen."
     );
-    return {
-      content: blocks,
-      cleanup: () => rmSync(dir, { recursive: true, force: true }),
-    };
   }
 
-  const b64 = readFileSync(filePath).toString("base64");
+  const b64 = buffer.toString("base64");
   return {
     content: [
       {
@@ -218,58 +149,56 @@ export async function classifyDocument(
   const totalStart = Date.now();
 
   const readStart = Date.now();
-  const fileSizeKB = Math.round(statSync(documentPath).size / 1024);
-  const { content, cleanup } = await buildSmartContent(documentPath, mimeType);
+  const storage = getStorage();
+  const buffer = await storage.get(documentPath);
+  const fileSizeKB = Math.round(buffer.length / 1024);
+  const { content } = await buildSmartContent(buffer, mimeType);
   const fileReadMs = Date.now() - readStart;
 
   console.log(
     `[classify] File: ${documentPath}, Size: ${fileSizeKB}KB, Prep: ${fileReadMs}ms`
   );
 
-  try {
-    const apiStart = Date.now();
-    const response = await withTimeout(
-      getAzureClient().chat.completions.create({
-        model: ANALYSIS_DEPLOYMENT,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [...content, { type: "text", text: CLASSIFY_PROMPT }],
-          },
-        ],
-        max_completion_tokens: 1024,
-        temperature: 0,
-      }),
-      CLASSIFY_TIMEOUT_MS,
-      `Dokumentklassifizierung (${fileSizeKB}KB)`
-    );
-    const apiCallMs = Date.now() - apiStart;
+  const apiStart = Date.now();
+  const response = await withTimeout(
+    getAzureClient().chat.completions.create({
+      model: ANALYSIS_DEPLOYMENT,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: [...content, { type: "text", text: CLASSIFY_PROMPT }],
+        },
+      ],
+      max_completion_tokens: 1024,
+      temperature: 0,
+    }),
+    CLASSIFY_TIMEOUT_MS,
+    `Dokumentklassifizierung (${fileSizeKB}KB)`
+  );
+  const apiCallMs = Date.now() - apiStart;
 
-    const msg = response.choices[0]?.message?.content;
-    if (!msg) {
-      throw new Error("No text response from classification");
-    }
-
-    console.log(
-      `[classify] API: ${apiCallMs}ms, Tokens in/out: ${response.usage?.prompt_tokens}/${response.usage?.completion_tokens}`
-    );
-
-    const parsed = parseJsonResponse(msg);
-    const totalMs = Date.now() - totalStart;
-    console.log(
-      `[classify] Total: ${totalMs}ms, Result: ${parsed.documentType}`
-    );
-
-    return {
-      documentType: (parsed.documentType as string) || "unknown",
-      confidence: (parsed.confidence as number) || 0,
-      reasoning: (parsed.reasoning as string) || "",
-      timing: { fileReadMs, fileSizeKB, apiCallMs, totalMs },
-    };
-  } finally {
-    cleanup?.();
+  const msg = response.choices[0]?.message?.content;
+  if (!msg) {
+    throw new Error("No text response from classification");
   }
+
+  console.log(
+    `[classify] API: ${apiCallMs}ms, Tokens in/out: ${response.usage?.prompt_tokens}/${response.usage?.completion_tokens}`
+  );
+
+  const parsed = parseJsonResponse(msg);
+  const totalMs = Date.now() - totalStart;
+  console.log(
+    `[classify] Total: ${totalMs}ms, Result: ${parsed.documentType}`
+  );
+
+  return {
+    documentType: (parsed.documentType as string) || "unknown",
+    confidence: (parsed.confidence as number) || 0,
+    reasoning: (parsed.reasoning as string) || "",
+    timing: { fileReadMs, fileSizeKB, apiCallMs, totalMs },
+  };
 }
 
 export const azureDocumentProvider: AnalysisProvider = {
@@ -284,8 +213,10 @@ export const azureDocumentProvider: AnalysisProvider = {
   ): Promise<ProviderResult> {
     const totalStart = Date.now();
 
-    const fileSizeKB = Math.round(statSync(documentPath).size / 1024);
-    const { content, cleanup } = await buildSmartContent(documentPath, mimeType);
+    const storage = getStorage();
+    const buffer = await storage.get(documentPath);
+    const fileSizeKB = Math.round(buffer.length / 1024);
+    const { content } = await buildSmartContent(buffer, mimeType);
     const prompt = getAnalysisPrompt(documentType);
 
     const carrierContext = `\n\nKONTEXT zum Frachtführer:\n- Name: ${carrierInfo.name}${carrierInfo.country ? `\n- Land: ${carrierInfo.country}` : ""}${carrierInfo.vatId ? `\n- USt-IdNr: ${carrierInfo.vatId}` : ""}`;
@@ -294,72 +225,68 @@ export const azureDocumentProvider: AnalysisProvider = {
       `[analyze] File: ${documentPath}, Size: ${fileSizeKB}KB, Type: ${documentType}, Timeout: ${ANALYSIS_TIMEOUT_MS / 1000}s`
     );
 
-    try {
-      const apiStart = Date.now();
-      const response = await withTimeout(
-        getAzureClient().chat.completions.create({
-          model: ANALYSIS_DEPLOYMENT,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: [
-                ...content,
-                { type: "text", text: prompt + carrierContext },
-              ],
-            },
-          ],
-          max_completion_tokens: 4096,
-          temperature: 0,
-        }),
-        ANALYSIS_TIMEOUT_MS,
-        `Dokumentanalyse (${fileSizeKB}KB, ${documentType})`
-      );
-      const apiCallMs = Date.now() - apiStart;
+    const apiStart = Date.now();
+    const response = await withTimeout(
+      getAzureClient().chat.completions.create({
+        model: ANALYSIS_DEPLOYMENT,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              ...content,
+              { type: "text", text: prompt + carrierContext },
+            ],
+          },
+        ],
+        max_completion_tokens: 4096,
+        temperature: 0,
+      }),
+      ANALYSIS_TIMEOUT_MS,
+      `Dokumentanalyse (${fileSizeKB}KB, ${documentType})`
+    );
+    const apiCallMs = Date.now() - apiStart;
 
-      const rawResponse = response.choices[0]?.message?.content;
-      if (!rawResponse) {
-        throw new Error("No text response from analysis");
-      }
-
-      console.log(
-        `[analyze] API: ${apiCallMs}ms, Tokens in/out: ${response.usage?.prompt_tokens}/${response.usage?.completion_tokens}`
-      );
-
-      const totalMs = Date.now() - totalStart;
-      console.log(`[analyze] Total: ${totalMs}ms`);
-
-      const parsed = parseJsonResponse(rawResponse);
-
-      const fields = (parsed.fields as Record<string, unknown>) || {};
-      const confidence = (parsed.confidence as number) || 0;
-      const missingFields = (parsed.missingFields as string[]) || [];
-      const rawSignals =
-        (parsed.riskSignals as Array<Record<string, unknown>>) || [];
-
-      const riskSignals: RiskSignal[] = rawSignals.map((s) => ({
-        severity: (s.severity as "critical" | "major" | "minor") || "minor",
-        rule: (s.rule as string) || "unknown",
-        description: (s.description as string) || "",
-        field: s.field as string | undefined,
-        points: (s.points as number) || 0,
-      }));
-
-      const extraction: ExtractionResult = {
-        fields,
-        confidence,
-        riskSignals,
-        missingFields,
-      };
-
-      return {
-        providerId: "azure-document",
-        documentType,
-        extraction,
-        rawResponse,
-      };
-    } finally {
-      cleanup?.();
+    const rawResponse = response.choices[0]?.message?.content;
+    if (!rawResponse) {
+      throw new Error("No text response from analysis");
     }
+
+    console.log(
+      `[analyze] API: ${apiCallMs}ms, Tokens in/out: ${response.usage?.prompt_tokens}/${response.usage?.completion_tokens}`
+    );
+
+    const totalMs = Date.now() - totalStart;
+    console.log(`[analyze] Total: ${totalMs}ms`);
+
+    const parsed = parseJsonResponse(rawResponse);
+
+    const fields = (parsed.fields as Record<string, unknown>) || {};
+    const confidence = (parsed.confidence as number) || 0;
+    const missingFields = (parsed.missingFields as string[]) || [];
+    const rawSignals =
+      (parsed.riskSignals as Array<Record<string, unknown>>) || [];
+
+    const riskSignals: RiskSignal[] = rawSignals.map((s) => ({
+      severity: (s.severity as "critical" | "major" | "minor") || "minor",
+      rule: (s.rule as string) || "unknown",
+      description: (s.description as string) || "",
+      field: s.field as string | undefined,
+      points: (s.points as number) || 0,
+    }));
+
+    const extraction: ExtractionResult = {
+      fields,
+      confidence,
+      riskSignals,
+      missingFields,
+    };
+
+    return {
+      providerId: "azure-document",
+      documentType,
+      extraction,
+      rawResponse,
+    };
   },
 };

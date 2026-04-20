@@ -17,12 +17,12 @@ const recBadge: Record<
   reject: { variant: "critical", label: "Ablehnen" },
 };
 
-export default function HomePage() {
-  const totalChecks = db
+export default async function HomePage() {
+  const totalChecks = await db
     .select({ count: sql<number>`count(*)` })
     .from(checks)
     .get();
-  const recentChecks = db
+  const recentChecks = await db
     .select()
     .from(checks)
     .orderBy(desc(checks.createdAt))

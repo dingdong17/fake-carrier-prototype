@@ -1,4 +1,4 @@
-import { PDFParse } from "pdf-parse";
+import { getMeta } from "unpdf";
 import type { RiskSignal } from "./types";
 import { FORENSIC_WEIGHTS } from "../forensic-weights";
 import { logForensicError } from "../log-forensic-error";
@@ -113,15 +113,12 @@ export interface PdfAnalysisResult {
 
 export async function analyzePdf(buffer: Buffer): Promise<PdfAnalysisResult> {
   let info: PdfInfo = {};
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
   try {
-    const result = await parser.getInfo();
+    const result = await getMeta(new Uint8Array(buffer));
     info = (result.info ?? {}) as PdfInfo;
   } catch (err) {
     logForensicError("analyzePdf", err);
     info = {};
-  } finally {
-    await parser.destroy().catch(() => {});
   }
 
   const text = buffer.toString("latin1");

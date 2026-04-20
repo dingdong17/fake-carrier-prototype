@@ -7,7 +7,7 @@ import { generateId, formatBacklogNumber } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const items = db
+  const items = await db
     .select()
     .from(backlogItems)
     .orderBy(asc(backlogItems.sortOrder))
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Title is required" }, { status: 400 });
       }
 
-      const result = db
+      const result = await db
         .select({ maxNum: sql<string>`max(item_number)` })
         .from(backlogItems)
         .get();
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
 
-    db.insert(backlogItems).values(item).run();
+    await db.insert(backlogItems).values(item).run();
 
     return NextResponse.json({ item });
   }
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       if (body.description !== undefined) updates.description = body.description;
       if (body.sortOrder !== undefined) updates.sortOrder = body.sortOrder;
 
-      db.update(backlogItems)
+      await db.update(backlogItems)
         .set(updates)
         .where(eq(backlogItems.id, body.id))
         .run();

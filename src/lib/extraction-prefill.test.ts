@@ -47,24 +47,22 @@ describe("extractCarrierPrefill", () => {
     ).toEqual({ coverageStart: "01.01.2026", coverageEnd: "31.12.2026" });
   });
 
-  it("formats coverageAmount into sumInsured for insurance-cert", () => {
+  it("formats coverageAmount into sumInsured as a pure number", () => {
     expect(
       extractCarrierPrefill("insurance-cert", {
         coverageAmount: { amount: 1000000, currency: "EUR" },
       })
-    ).toEqual({ sumInsured: "1.000.000 EUR" });
+    ).toEqual({ sumInsured: "1.000.000" });
   });
 
-  it("uses coverageAmount description when present", () => {
+  it("omits sumInsured when numeric amount is missing", () => {
     expect(
       extractCarrierPrefill("insurance-cert", {
         coverageAmount: {
-          amount: 1000000,
-          currency: "EUR",
-          description: "1,2 Mio. EUR pro Schaden",
+          description: "5 Mio. Euro je Schadenereignis",
         },
       })
-    ).toEqual({ sumInsured: "1,2 Mio. EUR pro Schaden" });
+    ).toEqual({});
   });
 
   it("joins coInsuredCompanies with newlines into coInsured", () => {

@@ -101,6 +101,18 @@ export const feedback = sqliteTable("feedback", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+export const analyticsEvents = sqliteTable("analytics_events", {
+  id: text("id").primaryKey(),
+  event: text("event").notNull(),
+  checkId: text("check_id"),
+  documentId: text("document_id"),
+  durationMs: integer("duration_ms"),
+  meta: text("meta"),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
 export type Check = typeof checks.$inferSelect;
 export type NewCheck = typeof checks.$inferInsert;
 export type Document = typeof documents.$inferSelect;
@@ -109,3 +121,4 @@ export type ChatMessage = typeof chatMessages.$inferSelect;
 export type BacklogItem = typeof backlogItems.$inferSelect;
 export type NewBacklogItem = typeof backlogItems.$inferInsert;
 export type Feedback = typeof feedback.$inferSelect;
+export type AnalyticsEvent = typeof analyticsEvents.$inferSelect;

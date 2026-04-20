@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { marked } from "marked";
+
+marked.use({ gfm: true, breaks: true });
 
 interface Message {
   role: "user" | "assistant";
@@ -220,15 +223,21 @@ export function ChatPanel({ checkId, isOpen, onClose }: ChatPanelProps) {
               className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
                   msg.role === "user"
-                    ? "bg-ec-dark-blue text-white"
+                    ? "bg-ec-dark-blue text-white whitespace-pre-wrap"
                     : "bg-ec-light-grey text-ec-grey-80"
                 }`}
               >
-                {msg.content || (isStreaming && i === messages.length - 1 ? (
-                  <span className="inline-block animate-pulse">...</span>
-                ) : null)}
+                {msg.role === "assistant" ? (
+                  msg.content ? (
+                    <AssistantMarkdown content={msg.content} />
+                  ) : isStreaming && i === messages.length - 1 ? (
+                    <span className="inline-block animate-pulse">...</span>
+                  ) : null
+                ) : (
+                  msg.content
+                )}
               </div>
             </div>
           ))}
@@ -286,5 +295,15 @@ export function ChatPanel({ checkId, isOpen, onClose }: ChatPanelProps) {
         </div>
       </div>
     </>
+  );
+}
+
+function AssistantMarkdown({ content }: { content: string }) {
+  const html = useMemo(() => marked.parse(content) as string, [content]);
+  return (
+    <div
+      className="space-y-2 text-sm leading-relaxed [&_p]:leading-relaxed [&_p:not(:last-child)]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:space-y-1 [&_strong]:font-semibold [&_em]:italic [&_code]:rounded [&_code]:bg-ec-medium-grey/40 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_pre]:rounded [&_pre]:bg-ec-medium-grey/40 [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs [&_pre]:overflow-x-auto [&_h1]:font-barlow [&_h1]:text-base [&_h1]:font-semibold [&_h2]:font-barlow [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:font-barlow [&_h3]:text-sm [&_h3]:font-semibold [&_a]:text-ec-dark-blue [&_a]:underline hover:[&_a]:no-underline [&_table]:w-full [&_table]:border-collapse [&_table]:text-xs [&_th]:border [&_th]:border-ec-medium-grey [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-semibold [&_td]:border [&_td]:border-ec-medium-grey [&_td]:px-2 [&_td]:py-1"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }

@@ -73,12 +73,10 @@ export function ExtractionPreview({
 
     if (extractedData.coverageAmount) {
       const amount = extractedData.coverageAmount.amount;
-      const currency = extractedData.coverageAmount.currency || "EUR";
-      const desc = extractedData.coverageAmount.description;
-      if (amount != null) {
+      if (typeof amount === "number" && Number.isFinite(amount)) {
         fields.push({
           label: "Versicherungssumme",
-          value: desc || `${amount.toLocaleString("de-DE")} ${currency}`,
+          value: amount.toLocaleString("de-DE"),
           formField: "sumInsured",
         });
       }

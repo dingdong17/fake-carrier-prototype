@@ -7,7 +7,7 @@ import { desc } from "drizzle-orm";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const items = db
+  const items = await db
     .select()
     .from(feedback)
     .orderBy(desc(feedback.createdAt))
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    db.insert(feedback).values(item).run();
+    await db.insert(feedback).values(item).run();
 
     return NextResponse.json({ item });
   } catch (error) {

@@ -19,8 +19,20 @@ export function NavLinks() {
   const { isBlocked, requestNavigation } = useNavigationBlockerState();
 
   const handleClick = (e: MouseEvent<HTMLAnchorElement>, href: string) => {
+    const samePath = pathname === href;
+
+    if (samePath && href === "/check") {
+      e.preventDefault();
+      const ok = window.confirm(
+        "Neue Prüfung starten? Alle bisher eingegebenen oder analysierten Daten gehen verloren."
+      );
+      if (!ok) return;
+      window.location.assign("/check");
+      return;
+    }
+
+    if (samePath) return;
     if (!isBlocked) return;
-    if (pathname === href) return;
     e.preventDefault();
     requestNavigation(href);
   };
