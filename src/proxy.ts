@@ -58,13 +58,21 @@ export async function proxy(req: NextRequest) {
   // Admin-only pages + API routes
   // Special case: /api/feedback POST (submit) is open to any authed user;
   // handler re-checks method since proxy shouldn't read request bodies.
+
+  // Broker + admin both need GET /api/admin/clients for the client-picker modal.
+  const isBrokerReadableAdminApi =
+    pathname === "/api/admin/clients" && req.method === "GET";
+
   const adminOnlyPaths =
     pathname.startsWith("/backlog") ||
     pathname.startsWith("/feedback") ||
     pathname.startsWith("/api/admin/") ||
     pathname.startsWith("/api/backlog");
 
-  if (adminOnlyPaths && role !== "admin") {
+  if (adminOnlyPaths && role !== "admin" && !isBrokerReadableAdminApi) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (isBrokerReadableAdminApi && role !== "admin" && role !== "broker") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

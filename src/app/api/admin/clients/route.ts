@@ -5,6 +5,18 @@ import { db } from "@/lib/db";
 import { clients, users } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
 
+export async function GET(_req: NextRequest) {
+  const session = await auth();
+  if (
+    !session?.user ||
+    (session.user.role !== "admin" && session.user.role !== "broker")
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const rows = await db.select().from(clients).orderBy(clients.name).all();
+  return NextResponse.json({ clients: rows });
+}
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user || session.user.role !== "admin") {
