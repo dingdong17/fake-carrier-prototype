@@ -37,10 +37,8 @@ export default async function ClientHome({
       ) : (
         <p className="text-sm text-ec-grey-70">
           Sie sehen diesen Kunden als <strong>{session.user.role}</strong>. Scans,
-          die Sie von hier starten, werden {session.user.role === "broker"
-            ? "ohne Credit-Verbrauch"
-            : "wie vom Kunden selbst"}{" "}
-          abgerechnet.
+          die Sie von hier starten, werden ohne Credit-Verbrauch abgerechnet —
+          nur Scans durch Kunden-Benutzer selbst verbrauchen Guthaben.
         </p>
       )}
 
