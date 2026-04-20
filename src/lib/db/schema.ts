@@ -1,8 +1,90 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+
+// ============================================================
+// Auth / RBAC / tenancy
+// ============================================================
+
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  emailVerified: text("email_verified"),
+  name: text("name"),
+  image: text("image"),
+  role: text("role", { enum: ["admin", "broker", "client"] }).notNull(),
+  clientId: text("client_id").references(() => clients.id),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+export const clients = sqliteTable("clients", {
+  id: text("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  creditBalance: integer("credit_balance").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+// Auth.js Drizzle adapter tables — required by @auth/drizzle-adapter
+// Reference: https://authjs.dev/getting-started/adapters/drizzle
+
+export const accounts = sqliteTable(
+  "accounts",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    provider: text("provider").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    refresh_token: text("refresh_token"),
+    access_token: text("access_token"),
+    expires_at: integer("expires_at"),
+    token_type: text("token_type"),
+    scope: text("scope"),
+    id_token: text("id_token"),
+    session_state: text("session_state"),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.provider, t.providerAccountId] }),
+  })
+);
+
+export const sessions = sqliteTable("sessions", {
+  sessionToken: text("session_token").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+});
+
+export const verificationTokens = sqliteTable(
+  "verification_tokens",
+  {
+    identifier: text("identifier").notNull(),
+    token: text("token").notNull(),
+    expires: integer("expires", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.identifier, t.token] }),
+  })
+);
+
+// ============================================================
+// Existing domain tables — checks gains clientId + createdByUserId
+// ============================================================
 
 export const checks = sqliteTable("checks", {
   id: text("id").primaryKey(),
   checkNumber: text("check_number").notNull().unique(),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => clients.id),
+  createdByUserId: text("created_by_user_id")
+    .notNull()
+    .references(() => users.id),
   carrierName: text("carrier_name").notNull(),
   carrierCountry: text("carrier_country"),
   carrierVatId: text("carrier_vat_id"),
@@ -113,6 +195,14 @@ export const analyticsEvents = sqliteTable("analytics_events", {
     .$defaultFn(() => new Date().toISOString()),
 });
 
+// ============================================================
+// Type exports
+// ============================================================
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type Client = typeof clients.$inferSelect;
+export type NewClient = typeof clients.$inferInsert;
 export type Check = typeof checks.$inferSelect;
 export type NewCheck = typeof checks.$inferInsert;
 export type Document = typeof documents.$inferSelect;
