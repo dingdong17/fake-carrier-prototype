@@ -33,14 +33,23 @@ export async function sendMagicLink(params: {
     return; // silent — UI always says "check your inbox"
   }
 
-  const host = new URL(url).host;
+  // Wrap the raw Auth.js callback in a /auth/confirm interstitial to protect
+  // the one-time token from email-security / safe-browsing scanners that
+  // pre-fetch the link and would otherwise consume it before the human ever
+  // clicks.
+  const urlObj = new URL(url);
+  const confirmUrl = new URL("/auth/confirm", urlObj.origin);
+  confirmUrl.searchParams.set("u", urlObj.pathname + urlObj.search);
+  const emailLink = confirmUrl.toString();
+
+  const host = urlObj.host;
   const subject = `Ihr Login-Link für ${host}`;
   const text = [
     `Hallo ${found.name ?? ""}`,
     "",
     "Klicken Sie auf den folgenden Link, um sich anzumelden (1 Stunde gültig):",
     "",
-    url,
+    emailLink,
     "",
     "Haben Sie keinen Login angefragt? Dann ignorieren Sie diese E-Mail einfach.",
     "",
@@ -53,14 +62,14 @@ export async function sendMagicLink(params: {
     console.log("\n=== MAGIC-LINK (dev stub) ===");
     console.log(`to:      ${identifier}`);
     console.log(`subject: ${subject}`);
-    console.log(`url:     ${url}`);
+    console.log(`url:     ${emailLink}`);
     console.log("=============================\n");
     try {
       const dir = path.join(process.cwd(), "tmp");
       await mkdir(dir, { recursive: true });
       await writeFile(
         path.join(dir, "last-magic-link.txt"),
-        `${new Date().toISOString()} ${identifier}\n${url}\n`,
+        `${new Date().toISOString()} ${identifier}\n${emailLink}\n`,
         "utf8"
       );
     } catch {
