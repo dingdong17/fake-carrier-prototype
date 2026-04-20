@@ -3,7 +3,12 @@ import { auth } from "@/lib/auth/config";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_EXACT = new Set(["/", "/login", "/login/check-email"]);
+const PUBLIC_EXACT = new Set([
+  "/",
+  "/login",
+  "/login/check-email",
+  "/auth/confirm",
+]);
 const PUBLIC_PREFIX = ["/api/auth/", "/_next/", "/favicon"];
 
 function isPublic(path: string): boolean {
