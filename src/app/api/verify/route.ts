@@ -3,8 +3,14 @@ import { validateVatNumber } from "@/lib/analysis/providers/vies-vat";
 import { checkWebsiteExists } from "@/lib/analysis/providers/website-check";
 import { checkDomainAge, extractDomainFromEmail, extractDomainFromUrl } from "@/lib/analysis/providers/domain-check";
 import { checkEmail } from "@/lib/analysis/providers/email-check";
+import { auth } from "@/lib/auth/config";
 
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  }
+
   try {
     const { companyName, vatId, country, website, email } = await request.json();
 

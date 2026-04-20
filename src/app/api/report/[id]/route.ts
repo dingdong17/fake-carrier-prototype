@@ -1,25 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { checks, documents } from "@/lib/db/schema";
+import { documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { generateReport } from "@/lib/pdf/generate";
+import { auth } from "@/lib/auth/config";
+import { AuthError } from "@/lib/auth/session";
+import { requireCheckScope } from "@/lib/auth/scope-check";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-
-  const check = await db.select().from(checks).where(eq(checks.id, id)).get();
-
-  if (!check) {
-    return NextResponse.json({ error: "Check not found" }, { status: 404 });
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
   }
+
+  const { id } = await params;
+  const checkId = id;
+
+  let scope;
+  try {
+    scope = await requireCheckScope(session.user, checkId);
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Not found" }, { status: 404 });
+  }
+  const { check } = scope;
 
   const docs = await db
     .select()
     .from(documents)
-    .where(eq(documents.checkId, id))
+    .where(eq(documents.checkId, checkId))
     .all();
 
   const reportDocs = docs.map((doc) => ({
