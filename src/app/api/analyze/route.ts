@@ -1,10 +1,11 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { checks, documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth/config";
 import { AuthError } from "@/lib/auth/session";
 import { requireCheckScope } from "@/lib/auth/scope-check";
+import { debitCredits, TIER_COSTS } from "@/lib/credits";
 import { classifyDocument } from "@/lib/analysis/providers/azure-document";
 import {
   calculateRiskScore,
@@ -64,7 +65,24 @@ export async function POST(request: NextRequest) {
       { status: 404, headers: { "Content-Type": "application/json" } }
     );
   }
-  const { check } = scope;
+  const { check, client } = scope;
+
+  // Credit gating per BL-040: client role debits tier cost; broker + admin do not.
+  const tier = check.testSet as keyof typeof TIER_COSTS;
+  const cost = TIER_COSTS[tier];
+
+  if (session.user.role === "client") {
+    const ok = await debitCredits(db, client.id, cost);
+    if (!ok) {
+      return NextResponse.json(
+        {
+          error: `Nicht genug Credits: benötigt ${cost}, verfügbar ${client.creditBalance}`,
+          code: "insufficient_credits",
+        },
+        { status: 402 }
+      );
+    }
+  }
 
   // Carrier name is optional — AI can analyze documents without it
   // The name may be extracted from documents or filled later
