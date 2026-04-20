@@ -15,6 +15,43 @@ import { FeedbackPrompt } from "@/components/feedback/feedback-prompt";
 import { extractCarrierPrefill } from "@/lib/extraction-prefill";
 import type { CarrierFormData } from "@/components/check/carrier-form";
 
+function CoInsuredList({ value }: { value: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const items = value
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const threshold = 3;
+
+  if (items.length <= threshold) {
+    return (
+      <>
+        {items.map((item, i) => (
+          <div key={i}>{item}</div>
+        ))}
+      </>
+    );
+  }
+
+  const visible = expanded ? items : items.slice(0, threshold);
+  const hiddenCount = items.length - threshold;
+
+  return (
+    <>
+      {visible.map((item, i) => (
+        <div key={i}>{item}</div>
+      ))}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="mt-1 text-xs font-medium text-ec-info hover:underline"
+      >
+        {expanded ? "Weniger anzeigen" : `… +${hiddenCount} weitere anzeigen`}
+      </button>
+    </>
+  );
+}
+
 const SUMMARY_FIELDS: Array<{ key: keyof CarrierFormData; label: string; suffix?: string }> = [
   { key: "carrierName", label: "Firmenname" },
   { key: "carrierCountry", label: "Land" },
@@ -281,8 +318,14 @@ export default function ResultsPage() {
                 >
                   <dt className="text-sm text-ec-grey-70">{label}</dt>
                   <dd className="text-sm font-medium text-ec-grey-80 text-right whitespace-pre-line">
-                    {val}
-                    {suffix ?? ""}
+                    {key === "coInsured" ? (
+                      <CoInsuredList value={val} />
+                    ) : (
+                      <>
+                        {val}
+                        {suffix ?? ""}
+                      </>
+                    )}
                   </dd>
                 </div>
               );
