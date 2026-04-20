@@ -23,6 +23,15 @@ export const authConfig: NextAuthConfig = {
   providers: [
     Email({
       from: process.env.EMAIL_FROM,
+      // Dummy SMTP config — nodemailer's createTransport refuses to init
+      // without a `server`, even though sendVerificationRequest below
+      // overrides the actual delivery path. Our sendMagicLink uses Resend
+      // (or dev-stub console logging), so this server is never contacted.
+      server: {
+        host: "localhost",
+        port: 25,
+        auth: { user: "unused", pass: "unused" },
+      },
       sendVerificationRequest: sendMagicLink,
     }),
   ],
