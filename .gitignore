@@ -57,3 +57,6 @@ data/
 # Superpowers brainstorm sessions
 .superpowers/
 logs/
+
+# Dev-stub magic-link output
+/tmp/
