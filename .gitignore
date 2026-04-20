@@ -49,6 +49,10 @@ uploads/
 # SQLite database
 data/
 
+# Local sample documents (dev-only, not for repo)
+/Samples
+/Requirements
+
 # Superpowers brainstorm sessions
 .superpowers/
 logs/
