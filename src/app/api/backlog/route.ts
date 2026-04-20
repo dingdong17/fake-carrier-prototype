@@ -3,10 +3,16 @@ import { db } from "@/lib/db";
 import { backlogItems } from "@/lib/db/schema";
 import { eq, sql, asc } from "drizzle-orm";
 import { generateId, formatBacklogNumber } from "@/lib/utils";
+import { auth } from "@/lib/auth/config";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const items = await db
     .select()
     .from(backlogItems)
@@ -17,6 +23,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
 

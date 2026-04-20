@@ -1,3 +1,5 @@
+import { auth } from "@/lib/auth/config";
+import { redirect } from "next/navigation";
 import {
   CHECK_CATALOG,
   getChecksByCategory,
@@ -112,7 +114,12 @@ function CheckCard({ check }: { check: CheckDefinition }) {
   );
 }
 
-export default function ChecksCatalogPage() {
+export default async function ChecksCatalogPage() {
+  const session = await auth();
+  if (!session?.user) {
+    redirect("/login");
+  }
+
   const categories = Object.keys(CATEGORY_LABELS) as CheckCategory[];
   const groups = categories
     .map((cat) => ({
