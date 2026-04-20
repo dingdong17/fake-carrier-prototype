@@ -171,7 +171,7 @@ function getExplanation(recommendation: string | null, riskScore: number, confid
 }
 
 export default function ResultsPage() {
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ slug: string; id: string }>();
   const [check, setCheck] = useState<CheckData | null>(null);
   const [documents, setDocuments] = useState<DocumentData[]>([]);
   const [loading, setLoading] = useState(true);

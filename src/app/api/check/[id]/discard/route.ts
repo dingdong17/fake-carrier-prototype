@@ -3,20 +3,34 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { checks, documents, chatMessages } from "@/lib/db/schema";
 import { getStorage } from "@/lib/storage";
+import { auth } from "@/lib/auth/config";
+import { AuthError } from "@/lib/auth/session";
+import { requireCheckScope } from "@/lib/auth/scope-check";
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  }
+
   const { id } = await params;
   if (!id) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  const check = await db.select().from(checks).where(eq(checks.id, id)).get();
-  if (!check) {
-    return NextResponse.json({ error: "Check not found" }, { status: 404 });
+  let scope;
+  try {
+    scope = await requireCheckScope(session.user, id);
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Not found" }, { status: 404 });
   }
+  const { check } = scope;
 
   if (check.status === "completed") {
     return NextResponse.json(

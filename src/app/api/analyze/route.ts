@@ -1,7 +1,11 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { checks, documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { auth } from "@/lib/auth/config";
+import { AuthError } from "@/lib/auth/session";
+import { requireCheckScope } from "@/lib/auth/scope-check";
+import { debitCredits, TIER_COSTS } from "@/lib/credits";
 import { classifyDocument } from "@/lib/analysis/providers/azure-document";
 import {
   calculateRiskScore,
@@ -19,6 +23,14 @@ export const maxDuration = 180;
 
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
+
+  const session = await auth();
+  if (!session?.user) {
+    return new Response(
+      JSON.stringify({ error: "Unauthenticated" }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
 
   let body: { checkId?: string };
   try {
@@ -38,17 +50,38 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const check = await db
-    .select()
-    .from(checks)
-    .where(eq(checks.id, checkId))
-    .get();
-
-  if (!check) {
+  let scope;
+  try {
+    scope = await requireCheckScope(session.user, checkId);
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return new Response(
+        JSON.stringify({ error: err.message }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
     return new Response(
-      JSON.stringify({ error: "Check not found" }),
+      JSON.stringify({ error: err instanceof Error ? err.message : "Not found" }),
       { status: 404, headers: { "Content-Type": "application/json" } }
     );
+  }
+  const { check, client } = scope;
+
+  // Credit gating per BL-040: client role debits tier cost; broker + admin do not.
+  const tier = check.testSet as keyof typeof TIER_COSTS;
+  const cost = TIER_COSTS[tier];
+
+  if (session.user.role === "client") {
+    const ok = await debitCredits(db, client.id, cost);
+    if (!ok) {
+      return NextResponse.json(
+        {
+          error: `Nicht genug Credits: benötigt ${cost}, verfügbar ${client.creditBalance}`,
+          code: "insufficient_credits",
+        },
+        { status: 402 }
+      );
+    }
   }
 
   // Carrier name is optional — AI can analyze documents without it

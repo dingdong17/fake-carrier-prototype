@@ -3,10 +3,16 @@ import { db } from "@/lib/db";
 import { feedback } from "@/lib/db/schema";
 import { generateId } from "@/lib/utils";
 import { desc } from "drizzle-orm";
+import { auth } from "@/lib/auth/config";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const items = await db
     .select()
     .from(feedback)
@@ -17,6 +23,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
 
@@ -47,4 +58,14 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function PUT(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // PUT handler implementation would go here
+  return NextResponse.json({ error: "Not implemented" }, { status: 501 });
 }

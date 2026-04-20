@@ -1,13 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
+import { auth } from "@/lib/auth/config";
+import { assertClientScope, AuthError } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { documents, checks } from "@/lib/db/schema";
+import { documents, checks, clients } from "@/lib/db/schema";
 import { generateId, formatCheckNumber } from "@/lib/utils";
 import { eq, sql } from "drizzle-orm";
 import { getStorage } from "@/lib/storage";
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Unauthenticated" },
+        { status: 401 }
+      );
+    }
+
     const formData = await request.formData();
 
     const files = formData.getAll("files") as File[];
@@ -15,9 +25,31 @@ export async function POST(request: NextRequest) {
     const carrierName = formData.get("carrierName") as string | null;
     const carrierCountry = formData.get("carrierCountry") as string | null;
     const carrierVatId = formData.get("carrierVatId") as string | null;
+    const clientSlug = formData.get("clientSlug") as string | null;
     const testSetRaw = formData.get("testSet") as string | null;
     const testSet: "quick" | "medium" | "full" =
       testSetRaw === "quick" || testSetRaw === "full" ? testSetRaw : "medium";
+
+    if (!clientSlug) {
+      return NextResponse.json(
+        { error: "clientSlug required" },
+        { status: 400 }
+      );
+    }
+
+    assertClientScope(session.user, clientSlug);
+
+    const client = await db
+      .select()
+      .from(clients)
+      .where(eq(clients.slug, clientSlug))
+      .get();
+    if (!client) {
+      return NextResponse.json(
+        { error: "Client not found" },
+        { status: 404 }
+      );
+    }
 
     if (!files || files.length === 0) {
       return NextResponse.json(
@@ -30,7 +62,7 @@ export async function POST(request: NextRequest) {
     let checkNumber: string;
 
     if (checkId) {
-      // Existing check — verify it exists
+      // Existing check — verify it exists AND is in the same client scope.
       const existing = await db
         .select()
         .from(checks)
@@ -41,6 +73,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { error: "Check not found" },
           { status: 404 }
+        );
+      }
+
+      if (existing.clientId !== client.id) {
+        return NextResponse.json(
+          { error: "Check belongs to a different client" },
+          { status: 403 }
         );
       }
 
@@ -75,6 +114,8 @@ export async function POST(request: NextRequest) {
         .values({
           id: resolvedCheckId,
           checkNumber,
+          clientId: client.id,
+          createdByUserId: session.user.id,
           carrierName: carrierName || "Unbekannt",
           carrierCountry: carrierCountry || null,
           carrierVatId: carrierVatId || null,
@@ -139,6 +180,12 @@ export async function POST(request: NextRequest) {
       documents: savedDocuments,
     });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.kind === "unauthenticated" ? 401 : 403 }
+      );
+    }
     console.error("Upload error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Upload failed", details: String(error) },

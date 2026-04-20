@@ -5,11 +5,19 @@ import { eq } from "drizzle-orm";
 import { classifyDocument } from "@/lib/analysis/providers/azure-document";
 import { analyzeDocumentWithForensics } from "@/lib/analysis/pipeline";
 import { logEvent } from "@/lib/analytics";
+import { auth } from "@/lib/auth/config";
+import { AuthError } from "@/lib/auth/session";
+import { requireCheckScope } from "@/lib/auth/scope-check";
 
 export const maxDuration = 180;
 
 export async function POST(request: NextRequest) {
   const requestStart = Date.now();
+
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthenticated" }, { status: 401 });
+  }
 
   try {
     const { documentId } = await request.json();
@@ -33,6 +41,19 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    const checkId = doc.checkId;
+
+    let scope;
+    try {
+      scope = await requireCheckScope(session.user, checkId);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      return NextResponse.json({ error: err instanceof Error ? err.message : "Not found" }, { status: 404 });
+    }
+    void scope; // scope available if needed downstream
 
     await logEvent("classify.start", {
       documentId,
