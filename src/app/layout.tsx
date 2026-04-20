@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { BrandProvider } from "@/components/brand-provider";
 import { NavigationBlockerProvider } from "@/lib/navigation-blocker";
+import { Providers } from "@/components/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,15 +25,17 @@ export default function RootLayout({
         />
       </head>
       <body className="flex min-h-screen flex-col" style={{ backgroundColor: "var(--brand-background)", fontFamily: "var(--brand-font-body)" }}>
-        <BrandProvider>
-          <NavigationBlockerProvider>
-            <Header />
-            <main className="mx-auto w-full flex-1 px-6 py-8">
-              {children}
-            </main>
-            <Footer />
-          </NavigationBlockerProvider>
-        </BrandProvider>
+        <Providers>
+          <BrandProvider>
+            <NavigationBlockerProvider>
+              <Header />
+              <main className="mx-auto w-full flex-1 px-6 py-8">
+                {children}
+              </main>
+              <Footer />
+            </NavigationBlockerProvider>
+          </BrandProvider>
+        </Providers>
       </body>
     </html>
   );
