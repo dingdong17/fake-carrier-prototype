@@ -5,6 +5,7 @@ import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { allowMagicLinkRequest } from "./rate-limit";
 
 export async function sendMagicLink(params: {
   identifier: string;
@@ -12,6 +13,13 @@ export async function sendMagicLink(params: {
   provider: { from?: string };
 }) {
   const { identifier, url } = params;
+
+  // Rate limit: 5 requests per hour per email. Silent drop on over-limit —
+  // same UX as unknown-email enumeration guard below.
+  if (!(await allowMagicLinkRequest(identifier))) {
+    return;
+  }
+
   const from = process.env.EMAIL_FROM ?? params.provider.from ?? "noreply@example.com";
 
   // Enumeration guard — do not leak whether the email is provisioned.
