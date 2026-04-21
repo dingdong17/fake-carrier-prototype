@@ -76,3 +76,53 @@ describe("authConfig.callbacks.signIn — trusted-domain email gate", () => {
     expect(result).toBe(true);
   });
 });
+
+describe("authConfig.callbacks.signIn — Entra tenant + domain validation", () => {
+  it("returns true for a valid tid + matching email domain (profile.tid present)", async () => {
+    const result = await callSignIn({
+      user: { email: "someone@covermesh.com", id: "u1" } as never,
+      account: { provider: "microsoft-entra-id", providerAccountId: "o1", type: "oauth" } as never,
+      profile: { tid: "00000000-0000-0000-0000-000000000001" } as never,
+    });
+    expect(result).toBe(true);
+  });
+
+  it("returns false when tid is not in the allowlist", async () => {
+    const result = await callSignIn({
+      user: { email: "someone@covermesh.com", id: "u1" } as never,
+      account: { provider: "microsoft-entra-id", providerAccountId: "o1", type: "oauth" } as never,
+      profile: { tid: "deadbeef-0000-0000-0000-000000000000" } as never,
+    });
+    expect(result).toBe(false);
+  });
+
+  it("returns false when the email domain does not match the tenant", async () => {
+    const result = await callSignIn({
+      user: { email: "someone@evil.com", id: "u1" } as never,
+      account: { provider: "microsoft-entra-id", providerAccountId: "o1", type: "oauth" } as never,
+      profile: { tid: "00000000-0000-0000-0000-000000000001" } as never,
+    });
+    expect(result).toBe(false);
+  });
+
+  it("decodes tid from id_token when profile.tid is absent", async () => {
+    // Hand-rolled minimal id_token: header.payload.signature, payload has tid.
+    const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({ tid: "00000000-0000-0000-0000-000000000001" })
+    ).toString("base64url");
+    const idToken = `${header}.${payload}.sig`;
+
+    const result = await callSignIn({
+      user: { email: "someone@covermesh.com", id: "u1" } as never,
+      account: {
+        provider: "microsoft-entra-id",
+        providerAccountId: "o1",
+        type: "oauth",
+        id_token: idToken,
+      } as never,
+      profile: null as never,
+    });
+    expect(result).toBe(true);
+  });
+});

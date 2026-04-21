@@ -7,6 +7,8 @@ import { users, accounts, sessions, verificationTokens, clients } from "@/lib/db
 import { eq } from "drizzle-orm";
 import { sendMagicLink } from "./send-magic-link";
 import { isTrustedDomain } from "./trusted-domains";
+import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
+import { validateEntraSignIn } from "./entra-tenants";
 
 export const authConfig: NextAuthConfig = {
   adapter: DrizzleAdapter(db, {
@@ -35,9 +37,29 @@ export const authConfig: NextAuthConfig = {
       },
       sendVerificationRequest: sendMagicLink,
     }),
+    MicrosoftEntraId({
+      clientId: process.env.AZURE_AD_CLIENT_ID!,
+      clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
+      issuer: "https://login.microsoftonline.com/organizations/v2.0",
+      allowDangerousEmailAccountLinking: true,
+      profile(profile) {
+        // Auth.js v5 passes this result straight to the Drizzle adapter's
+        // createUser. Our users.role is NOT NULL with no default, so we must
+        // supply it here for first-time Entra users. Existing users bypass
+        // createUser entirely (account linking on matched email).
+        return {
+          id: profile.sub ?? profile.oid,
+          name: profile.name,
+          email: profile.email ?? profile.preferred_username,
+          image: null,
+          role: "broker" as const,
+          clientId: null,
+        };
+      },
+    }),
   ],
   callbacks: {
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       // Trusted-domain policy: covermesh (and later Ecclesia / SCHUNCK)
       // must use Microsoft SSO, not magic-link. The login form catches
       // this client-side; this is the server-side backstop for direct
@@ -48,8 +70,32 @@ export const authConfig: NextAuthConfig = {
         return false;
       }
 
-      // Entra SSO tenant + domain validation is added in Task 4 as an
-      // `account?.provider === "microsoft-entra-id"` branch above this line.
+      // Entra SSO: validate the tenant id (tid claim) against the code-local
+      // allowlist AND confirm the email domain matches the tenant's expected
+      // domain. Failure logs server-side (no detail leaked to the client) and
+      // returns false → /login?error=AccessDenied.
+      if (account?.provider === "microsoft-entra-id") {
+        let tid = (profile as { tid?: string } | null | undefined)?.tid ?? "";
+        if (!tid && account.id_token) {
+          try {
+            const payload = JSON.parse(
+              Buffer.from(account.id_token.split(".")[1], "base64url").toString("utf8")
+            );
+            tid = typeof payload.tid === "string" ? payload.tid : "";
+          } catch {
+            // fall through — empty tid triggers unknown_tenant below
+          }
+        }
+
+        const email = user.email ?? "";
+        const result = validateEntraSignIn({ tid, email });
+        if (!result.ok) {
+          console.warn(
+            `[entra] reject sign-in: tid=${tid || "(missing)"} email=${email} reason=${result.reason}`
+          );
+          return false;
+        }
+      }
 
       return true;
     },
