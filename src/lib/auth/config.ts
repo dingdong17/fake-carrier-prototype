@@ -42,10 +42,15 @@ export const authConfig: NextAuthConfig = {
       // must use Microsoft SSO, not magic-link. The login form catches
       // this client-side; this is the server-side backstop for direct
       // POSTs to /api/auth/signin/email. Auth.js wraps a `false` return
-      // as AccessDenied, so the user lands on /login?error=AccessDenied.
+      // as AccessDenied; with pages.error = "/login", the user lands on
+      // /login?error=AccessDenied.
       if (account?.provider === "email" && user.email && isTrustedDomain(user.email)) {
         return false;
       }
+
+      // Entra SSO tenant + domain validation is added in Task 4 as an
+      // `account?.provider === "microsoft-entra-id"` branch above this line.
+
       return true;
     },
 
@@ -70,6 +75,7 @@ export const authConfig: NextAuthConfig = {
   pages: {
     signIn: "/login",
     verifyRequest: "/login/check-email",
+    error: "/login",
   },
 };
 
