@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { allowMagicLinkRequest } from "./rate-limit";
+import { isTrustedDomain } from "./entra-tenants";
 
 export async function sendMagicLink(params: {
   identifier: string;
@@ -13,6 +14,13 @@ export async function sendMagicLink(params: {
   provider: { from?: string };
 }) {
   const { identifier, url } = params;
+
+  // Trusted-domain backstop: covermesh (and later Ecclesia / SCHUNCK) must
+  // use Microsoft SSO. The primary gate is in the login form; this catches
+  // any direct hit to the NextAuth email-callback endpoint.
+  if (isTrustedDomain(identifier)) {
+    throw new Error("AccessDenied: trusted domain must use SSO");
+  }
 
   // Rate limit: 5 requests per hour per email. Silent drop on over-limit —
   // same UX as unknown-email enumeration guard below.
