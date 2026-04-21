@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { users, accounts, sessions, verificationTokens, clients } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendMagicLink } from "./send-magic-link";
-import { isTrustedDomain } from "./entra-tenants";
+import { isTrustedDomain } from "./trusted-domains";
 
 export const authConfig: NextAuthConfig = {
   adapter: DrizzleAdapter(db, {

@@ -40,12 +40,7 @@ function domainOf(email: string): string | null {
   return email.slice(at + 1).toLowerCase();
 }
 
-export function isTrustedDomain(email: string): boolean {
-  const domain = domainOf(email);
-  if (!domain) return false;
-  const map = TENANT_ALLOWLIST();
-  return Object.values(map).some((t) => t.emailDomain === domain);
-}
+export { isTrustedDomain } from "./trusted-domains";
 
 export function tenantForEmail(email: string): TenantConfig | null {
   const domain = domainOf(email);
