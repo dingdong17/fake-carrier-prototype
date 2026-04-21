@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { users, accounts, sessions, verificationTokens, clients } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendMagicLink } from "./send-magic-link";
+import { isTrustedDomain } from "./entra-tenants";
 
 export const authConfig: NextAuthConfig = {
   adapter: DrizzleAdapter(db, {
@@ -36,6 +37,18 @@ export const authConfig: NextAuthConfig = {
     }),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      // Trusted-domain policy: covermesh (and later Ecclesia / SCHUNCK)
+      // must use Microsoft SSO, not magic-link. The login form catches
+      // this client-side; this is the server-side backstop for direct
+      // POSTs to /api/auth/signin/email. Auth.js wraps a `false` return
+      // as AccessDenied, so the user lands on /login?error=AccessDenied.
+      if (account?.provider === "email" && user.email && isTrustedDomain(user.email)) {
+        return false;
+      }
+      return true;
+    },
+
     async session({ session, user }) {
       const u = user as typeof user & { role: string; clientId: string | null };
       session.user.role = u.role as "admin" | "broker" | "client";
