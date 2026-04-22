@@ -15,6 +15,7 @@ interface KanbanColumnProps {
   status: string;
   items: ColumnItem[];
   onDragStart: (e: React.DragEvent, id: string) => void;
+  onDragEnd: () => void;
   onDrop: (e: React.DragEvent, status: string) => void;
   onItemClick: (id: string) => void;
 }
@@ -24,6 +25,7 @@ export function KanbanColumn({
   status,
   items,
   onDragStart,
+  onDragEnd,
   onDrop,
   onItemClick,
 }: KanbanColumnProps) {
@@ -47,6 +49,7 @@ export function KanbanColumn({
             key={item.id}
             item={item}
             onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
             onClick={onItemClick}
           />
         ))}

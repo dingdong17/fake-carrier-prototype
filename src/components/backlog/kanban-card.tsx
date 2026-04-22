@@ -12,14 +12,16 @@ interface KanbanCardProps {
     category: BacklogCategory | null;
   };
   onDragStart: (e: React.DragEvent, id: string) => void;
+  onDragEnd: () => void;
   onClick: (id: string) => void;
 }
 
-export function KanbanCard({ item, onDragStart, onClick }: KanbanCardProps) {
+export function KanbanCard({ item, onDragStart, onDragEnd, onClick }: KanbanCardProps) {
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, item.id)}
+      onDragEnd={onDragEnd}
       onClick={() => onClick(item.id)}
       className="cursor-pointer rounded-lg border border-ec-medium-grey bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
     >

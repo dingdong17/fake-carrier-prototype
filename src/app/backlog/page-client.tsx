@@ -61,17 +61,22 @@ export default function BacklogPageClient() {
   async function handleDrop(_e: React.DragEvent, newStatus: string) {
     if (!draggedId) return;
     const id = draggedId;
+    const prevItems = items;
     setItems((prev) =>
       prev.map((it) =>
         it.id === id ? { ...it, status: newStatus as Status } : it
       )
     );
     setDraggedId(null);
-    await fetch("/api/backlog", {
+    const res = await fetch("/api/backlog", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "update", id, status: newStatus }),
     });
+    if (!res.ok) {
+      // Roll back optimistic update on server error.
+      setItems(prevItems);
+    }
   }
 
   async function handleAdd(
@@ -85,6 +90,7 @@ export default function BacklogPageClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "create", title, priority, description, category }),
     });
+    if (!res.ok) return;
     const data = await res.json();
     setItems((prev) => [...prev, data.item]);
   }
@@ -177,6 +183,7 @@ export default function BacklogPageClient() {
               filteredItems.filter((i) => i.status === col.status)
             )}
             onDragStart={handleDragStart}
+            onDragEnd={() => setDraggedId(null)}
             onDrop={handleDrop}
             onItemClick={(id) => setEditingId(id)}
           />
