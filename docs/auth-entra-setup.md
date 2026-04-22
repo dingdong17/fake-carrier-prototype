@@ -46,9 +46,17 @@ And to local `.env.local`.
 
 ## 5. API permissions
 
-Default `User.Read` (delegated, Microsoft Graph) is sufficient. No
-additional scopes are needed — we only use the OpenID Connect flow
-(`openid profile email`) to verify the user.
+Auth.js requests the following delegated scopes by default:
+
+- `openid` — OpenID Connect sign-in (standard).
+- `profile` — basic profile claims (`name`, `oid`, `sub`, `tid`).
+- `email` — the `email` claim.
+- `User.Read` — Microsoft Graph read of the signed-in user's profile.
+  Auth.js's Entra provider requests this automatically; we do not
+  currently *use* Graph, but the permission must be granted or the
+  sign-in will fail at consent.
+
+No additional scopes are needed.
 
 ## 6. Admin consent
 
@@ -68,6 +76,25 @@ https://login.microsoftonline.com/{TENANT_ID}/adminconsent?client_id={AZURE_AD_C
 2. Open http://localhost:3000/login → Microsoft button.
 3. Sign in with a covermesh account.
 4. Expected: land on `/broker` (or `/admin` if already promoted).
+
+## 8. Preview deployments and redirect URIs
+
+Vercel preview URLs rotate per deployment (e.g.
+`fakecarrier-<hash>-covermesh.vercel.app`). Entra does **not** support
+wildcard redirect URIs on the Web platform, so we have two workable
+options:
+
+- **Short term (current):** For one-off preview smoke tests, temporarily
+  add the preview URL's `/api/auth/callback/microsoft-entra-id` to the
+  Azure app's Authentication → Redirect URIs list, test, then remove.
+  Cheap but manual.
+- **Long term (recommended):** Assign a stable Vercel preview alias
+  domain (e.g. `preview.fakecarrier.rorlach.de`) in the project's
+  Domains settings and register that once. All preview deployments on
+  the branch get the same alias.
+
+Do not register the bare `fakecarrier-*.vercel.app` pattern — Azure
+does not accept wildcards there.
 
 ## Adding another tenant later
 

@@ -126,3 +126,61 @@ describe("authConfig.callbacks.signIn — Entra tenant + domain validation", () 
     expect(result).toBe(true);
   });
 });
+
+describe("authConfig — Entra provider profile() shape", () => {
+  // The Drizzle adapter's createUser spreads profile() into the users insert.
+  // Because users.role is NOT NULL with no default, profile() MUST return
+  // role: "broker" so first-time Entra users don't fail the DB constraint.
+  // Regression guard: this test fails loudly if anyone drops the field.
+  //
+  // Note on access path: Auth.js v5 stores the user-supplied profile callback
+  // on `provider.options.profile`, not `provider.profile` — the top-level
+  // `profile` is the upstream default that fetches a photo from MS Graph.
+  function getCustomProfile(): (p: Record<string, unknown>) => Record<string, unknown> {
+    const entra = authConfig.providers.find((p) => {
+      return typeof p === "object" && p !== null && "id" in p && (p as { id: unknown }).id === "microsoft-entra-id";
+    });
+    if (!entra) throw new Error("Entra provider not found on authConfig.providers");
+    const options = (entra as { options?: { profile?: unknown } }).options;
+    if (typeof options?.profile !== "function") {
+      throw new Error("Custom profile function not found on provider.options");
+    }
+    return options.profile as (p: Record<string, unknown>) => Record<string, unknown>;
+  }
+
+  it("returns role='broker' and clientId=null for a new Entra user", () => {
+    const profile = getCustomProfile();
+    const result = profile({
+      sub: "sub-123",
+      oid: "oid-abc",
+      name: "Test Covermesh",
+      email: "test@covermesh.com",
+      preferred_username: "test@covermesh.com",
+    });
+
+    expect(result).toMatchObject({
+      id: "sub-123",
+      name: "Test Covermesh",
+      email: "test@covermesh.com",
+      image: null,
+      role: "broker",
+      clientId: null,
+    });
+  });
+
+  it("falls back to oid when sub is absent, and to preferred_username when email is absent", () => {
+    const profile = getCustomProfile();
+    const result = profile({
+      oid: "oid-abc",
+      name: "Fallback User",
+      preferred_username: "fallback@covermesh.com",
+    });
+
+    expect(result).toMatchObject({
+      id: "oid-abc",
+      email: "fallback@covermesh.com",
+      role: "broker",
+      clientId: null,
+    });
+  });
+});
