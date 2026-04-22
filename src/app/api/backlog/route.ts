@@ -7,6 +7,33 @@ import { auth } from "@/lib/auth/config";
 
 export const dynamic = "force-dynamic";
 
+const VALID_CATEGORIES = new Set([
+  "ui",
+  "ai_chat",
+  "ai_analytics",
+  "external_api",
+  "client_credits",
+  "security_rbac",
+  "infrastructure",
+]);
+
+type Category = "ui" | "ai_chat" | "ai_analytics" | "external_api" |
+  "client_credits" | "security_rbac" | "infrastructure";
+
+function parseCategory(
+  raw: unknown,
+  opts: { allowAbsent: boolean }
+): { ok: true; value: Category | null } | { ok: false } {
+  if (raw === undefined) {
+    return opts.allowAbsent ? { ok: true, value: null } : { ok: false };
+  }
+  if (raw === null) return { ok: true, value: null };
+  if (typeof raw === "string" && VALID_CATEGORIES.has(raw)) {
+    return { ok: true, value: raw as Category };
+  }
+  return { ok: false };
+}
+
 export async function GET() {
   const session = await auth();
   if (!session?.user || session.user.role !== "admin") {
@@ -36,6 +63,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Title is required" }, { status: 400 });
       }
 
+      const cat = parseCategory(body.category, { allowAbsent: true });
+      if (!cat.ok) {
+        return NextResponse.json({ error: "Invalid category" }, { status: 400 });
+      }
+
       const result = await db
         .select({ maxNum: sql<string>`max(item_number)` })
         .from(backlogItems)
@@ -50,18 +82,18 @@ export async function POST(request: NextRequest) {
         id: generateId(),
         itemNumber: formatBacklogNumber(seq),
         title: body.title.trim() as string,
-      description: (body.description as string) || null,
-      priority,
-      status: "backlog" as const,
-      sortOrder: seq,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+        description: (body.description as string) || null,
+        priority,
+        status: "backlog" as const,
+        category: cat.value,
+        sortOrder: seq,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-    await db.insert(backlogItems).values(item).run();
-
-    return NextResponse.json({ item });
-  }
+      await db.insert(backlogItems).values(item).run();
+      return NextResponse.json({ item });
+    }
 
     if (body.action === "update") {
       if (!body.id || typeof body.id !== "string") {
@@ -78,11 +110,27 @@ export async function POST(request: NextRequest) {
       if (body.description !== undefined) updates.description = body.description;
       if (body.sortOrder !== undefined) updates.sortOrder = body.sortOrder;
 
+      if ("category" in body) {
+        const cat = parseCategory(body.category, { allowAbsent: false });
+        if (!cat.ok) {
+          return NextResponse.json({ error: "Invalid category" }, { status: 400 });
+        }
+        updates.category = cat.value;
+      }
+
       await db.update(backlogItems)
         .set(updates)
         .where(eq(backlogItems.id, body.id))
         .run();
 
+      return NextResponse.json({ success: true });
+    }
+
+    if (body.action === "delete") {
+      if (!body.id || typeof body.id !== "string") {
+        return NextResponse.json({ error: "ID is required for delete" }, { status: 400 });
+      }
+      await db.delete(backlogItems).where(eq(backlogItems.id, body.id)).run();
       return NextResponse.json({ success: true });
     }
 
