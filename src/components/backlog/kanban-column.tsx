@@ -1,4 +1,5 @@
 import { KanbanCard } from "./kanban-card";
+import type { BacklogCategory } from "@/lib/db/schema";
 
 interface ColumnItem {
   id: string;
@@ -6,6 +7,7 @@ interface ColumnItem {
   title: string;
   description: string | null;
   priority: "critical" | "high" | "medium" | "low";
+  category: BacklogCategory | null;
 }
 
 interface KanbanColumnProps {
@@ -13,7 +15,9 @@ interface KanbanColumnProps {
   status: string;
   items: ColumnItem[];
   onDragStart: (e: React.DragEvent, id: string) => void;
+  onDragEnd: () => void;
   onDrop: (e: React.DragEvent, status: string) => void;
+  onItemClick: (id: string) => void;
 }
 
 export function KanbanColumn({
@@ -21,7 +25,9 @@ export function KanbanColumn({
   status,
   items,
   onDragStart,
+  onDragEnd,
   onDrop,
+  onItemClick,
 }: KanbanColumnProps) {
   return (
     <div
@@ -39,7 +45,13 @@ export function KanbanColumn({
       </div>
       <div className="flex min-h-[200px] flex-col gap-2">
         {items.map((item) => (
-          <KanbanCard key={item.id} item={item} onDragStart={onDragStart} />
+          <KanbanCard
+            key={item.id}
+            item={item}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onClick={onItemClick}
+          />
         ))}
       </div>
     </div>
