@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { isTrustedDomain } from "@/lib/auth/trusted-domains";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -15,6 +16,17 @@ export function LoginForm() {
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
+
+        // Client-side gate: trusted-domain emails must use Microsoft SSO.
+        // Server-side backstop is in authConfig.callbacks.signIn, which
+        // catches anyone who bypasses this form (direct POST to Auth.js).
+        if (isTrustedDomain(email)) {
+          setError(
+            "Ihre E-Mail-Adresse erfordert eine Microsoft-Anmeldung. Bitte nutzen Sie den Microsoft-Button oben."
+          );
+          return;
+        }
+
         startTransition(async () => {
           const res = await signIn("email", {
             email,
@@ -25,8 +37,6 @@ export function LoginForm() {
             setError("E-Mail-Versand fehlgeschlagen. Versuchen Sie es erneut.");
             return;
           }
-          // Redirect to verify-request page; Auth.js does this automatically
-          // when redirect: true, but we've set redirect:false to capture errors.
           window.location.href = "/login/check-email";
         });
       }}
