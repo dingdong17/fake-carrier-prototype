@@ -161,6 +161,17 @@ export const backlogItems = sqliteTable("backlog_items", {
   })
     .notNull()
     .default("backlog"),
+  category: text("category", {
+    enum: [
+      "ui",
+      "ai_chat",
+      "ai_analytics",
+      "external_api",
+      "client_credits",
+      "security_rbac",
+      "infrastructure",
+    ],
+  }),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: text("created_at")
     .notNull()
@@ -210,5 +221,8 @@ export type NewDocument = typeof documents.$inferInsert;
 export type ChatMessage = typeof chatMessages.$inferSelect;
 export type BacklogItem = typeof backlogItems.$inferSelect;
 export type NewBacklogItem = typeof backlogItems.$inferInsert;
+export type BacklogCategory = NonNullable<
+  typeof backlogItems.$inferSelect["category"]
+>;
 export type Feedback = typeof feedback.$inferSelect;
 export type AnalyticsEvent = typeof analyticsEvents.$inferSelect;
