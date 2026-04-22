@@ -1,4 +1,6 @@
 import { Badge } from "@/components/ui/badge";
+import { PRIORITY_LABELS, CATEGORY_LABELS } from "@/lib/backlog/labels";
+import type { BacklogCategory } from "@/lib/db/schema";
 
 interface KanbanCardProps {
   item: {
@@ -7,31 +9,32 @@ interface KanbanCardProps {
     title: string;
     description: string | null;
     priority: "critical" | "high" | "medium" | "low";
+    category: BacklogCategory | null;
   };
   onDragStart: (e: React.DragEvent, id: string) => void;
+  onClick: (id: string) => void;
 }
 
-const priorityLabel: Record<string, string> = {
-  critical: "Kritisch",
-  high: "Hoch",
-  medium: "Mittel",
-  low: "Niedrig",
-};
-
-export function KanbanCard({ item, onDragStart }: KanbanCardProps) {
+export function KanbanCard({ item, onDragStart, onClick }: KanbanCardProps) {
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, item.id)}
-      className="cursor-grab rounded-lg border border-ec-medium-grey bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
+      onClick={() => onClick(item.id)}
+      className="cursor-pointer rounded-lg border border-ec-medium-grey bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
     >
-      <div className="mb-1.5 flex items-center justify-between">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className="font-mono text-xs text-ec-grey-80">
           {item.itemNumber}
         </span>
-        <Badge variant={item.priority}>
-          {priorityLabel[item.priority] || item.priority}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {item.category && (
+            <span className="rounded bg-ec-light-grey px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ec-grey-80">
+              {CATEGORY_LABELS[item.category]}
+            </span>
+          )}
+          <Badge variant={item.priority}>{PRIORITY_LABELS[item.priority]}</Badge>
+        </div>
       </div>
       <p className="text-sm font-medium text-ec-dark-blue">{item.title}</p>
       {item.description && (
