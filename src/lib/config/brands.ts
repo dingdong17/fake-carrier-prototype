@@ -90,4 +90,4 @@ export function getBrand(id: string): BrandConfig {
   return BRANDS[id] || BRANDS.ecclesia;
 }
 
-export const DEFAULT_BRAND = "ecclesia";
+export const DEFAULT_BRAND = "schunck";
