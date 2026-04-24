@@ -12,7 +12,7 @@ type LinkDef = { href: string; label: string; roles: Role[] };
 const LINKS: LinkDef[] = [
   { href: "/admin", label: "Admin", roles: ["admin"] },
   { href: "/broker", label: "Broker-Start", roles: ["admin", "broker"] },
-  { href: "/neue-pruefung", label: "Neue Prüfung", roles: ["admin", "broker", "client"] },
+  { href: "/neue-pruefung", label: "Neue Prüfung", roles: ["broker", "client"] },
   { href: "/checks-catalog", label: "Prüfkatalog", roles: ["admin", "broker", "client"] },
 ];
 
