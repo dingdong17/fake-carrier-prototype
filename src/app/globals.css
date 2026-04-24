@@ -20,9 +20,57 @@
   --color-ec-warning: #EF6C00;
   --color-ec-info: #0088D1;
   --color-ec-success: #2F7D31;
+  --color-ec-abdunklung: #001447;
+  --color-ec-petrol: #05809F;
+  --color-ec-lichtblau: #2275F1;
+  --color-ec-hellblau: #F3F7FD;
+  --color-ec-surface: #FFFFFF;
 
   --font-barlow: "Barlow", sans-serif;
   --font-inter: "Inter", sans-serif;
+}
+
+/* Design tokens for the public landing page — mirror colors_and_type.css */
+:root {
+  --ec-abdunklung: #001447;
+  --ec-petrol: #05809F;
+  --ec-lichtblau: #2275F1;
+  --ec-hellblau: #F3F7FD;
+  --ec-dark-blue: #2649A5;
+  --ec-light-blue: #0050D2;
+  --ec-mint: #75E7BC;
+  --ec-dark-green: #005E47;
+  --ec-light-green: #7BCA65;
+  --ec-grey-80: #3B3B3B;
+  --ec-grey-70: #979797;
+  --ec-grey-60: #CCCCCC;
+  --ec-grey-40: #EEEEEE;
+  --ec-medium-grey: #E2E2E2;
+  --ec-light-grey: #F7F7F7;
+  --ec-error: #E02E2A;
+  --ec-warning: #EF6C00;
+  --ec-info: #0088D1;
+  --ec-success: #2F7D31;
+
+  --fg-1: var(--ec-abdunklung);
+  --fg-2: var(--ec-grey-80);
+  --fg-3: var(--ec-grey-70);
+  --border-1: var(--ec-medium-grey);
+  --border-2: var(--ec-grey-40);
+
+  --font-display: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --content-max: 1304px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --shadow-sm: 0 1px 3px rgba(0, 20, 71, 0.08), 0 1px 2px rgba(0, 20, 71, 0.04);
+  --shadow-md: 0 6px 16px -4px rgba(0, 20, 71, 0.12),
+    0 2px 4px rgba(0, 20, 71, 0.06);
+  --ease-std: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
 }
 
 /* Brand CSS variables — set by BrandProvider, defaults to Ecclesia */
@@ -63,5 +111,19 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--brand-font-heading);
     color: var(--brand-primary);
+  }
+
+  /* Landing page takes over body styling from the app shell */
+  body:has(.fc-landing) {
+    background: #fff;
+    color: var(--fg-2);
+    font-family: var(--font-body);
+  }
+  body:has(.fc-landing) h1,
+  body:has(.fc-landing) h2,
+  body:has(.fc-landing) h3,
+  body:has(.fc-landing) h4 {
+    font-family: var(--font-display);
+    color: var(--fg-1);
   }
 }
