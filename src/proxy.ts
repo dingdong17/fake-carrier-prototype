@@ -9,11 +9,29 @@ const PUBLIC_EXACT = new Set([
   "/login/check-email",
   "/auth/confirm",
   "/auth/confirm/complete",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/impressum",
+  "/datenschutz",
+  "/agb",
 ]);
-const PUBLIC_PREFIX = ["/api/auth/", "/_next/", "/favicon"];
+const PUBLIC_PREFIX = [
+  "/api/auth/",
+  "/_next/",
+  "/favicon",
+  // Marketing / public landing flows — webinar signup + (later) demo access
+  "/webinar/",
+  "/api/webinar/",
+  "/demo/",
+  "/api/demo/",
+];
+
+// Exact path: /api/analytics — public fire-and-forget event endpoint
+const PUBLIC_ANALYTICS = "/api/analytics";
 
 function isPublic(path: string): boolean {
   if (PUBLIC_EXACT.has(path)) return true;
+  if (path === PUBLIC_ANALYTICS) return true;
   return PUBLIC_PREFIX.some((p) => path.startsWith(p));
 }
 

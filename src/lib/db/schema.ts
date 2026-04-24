@@ -207,6 +207,87 @@ export const analyticsEvents = sqliteTable("analytics_events", {
 });
 
 // ============================================================
+// Marketing landing — webinar & demo-access flows
+// ============================================================
+
+export const webinarSlots = sqliteTable("webinar_slots", {
+  id: text("id").primaryKey(),
+  startsAt: text("starts_at").notNull(),
+  endsAt: text("ends_at").notNull(),
+  timezone: text("timezone").notNull().default("Europe/Berlin"),
+  maxAttendees: integer("max_attendees").notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  notes: text("notes"),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+export const webinarRegistrations = sqliteTable("webinar_registrations", {
+  id: text("id").primaryKey(),
+  slotId: text("slot_id")
+    .notNull()
+    .references(() => webinarSlots.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  company: text("company").notNull(),
+  email: text("email").notNull(),
+  role: text("role").notNull(),
+  consentAt: text("consent_at").notNull(),
+  status: text("status", {
+    enum: ["pending_confirm", "confirmed", "waitlist", "cancelled"],
+  })
+    .notNull()
+    .default("pending_confirm"),
+  confirmToken: text("confirm_token").notNull().unique(),
+  confirmTokenExpires: integer("confirm_token_expires", {
+    mode: "timestamp_ms",
+  }).notNull(),
+  confirmedAt: text("confirmed_at"),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+export type WebinarSlot = typeof webinarSlots.$inferSelect;
+export type NewWebinarSlot = typeof webinarSlots.$inferInsert;
+export type WebinarRegistration = typeof webinarRegistrations.$inferSelect;
+export type NewWebinarRegistration = typeof webinarRegistrations.$inferInsert;
+
+export const demoRequests = sqliteTable("demo_requests", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  company: text("company").notNull(),
+  email: text("email").notNull(),
+  // lowercase domain part of email — enables "one tenant per domain" lookup
+  emailDomain: text("email_domain").notNull(),
+  phone: text("phone"),
+  fleetSize: text("fleet_size").notNull(),
+  tms: text("tms").notNull(),
+  note: text("note"),
+  consentAt: text("consent_at").notNull(),
+  status: text("status", {
+    enum: ["pending_confirm", "confirmed", "approved", "rejected"],
+  })
+    .notNull()
+    .default("pending_confirm"),
+  confirmToken: text("confirm_token").notNull().unique(),
+  confirmTokenExpires: integer("confirm_token_expires", {
+    mode: "timestamp_ms",
+  }).notNull(),
+  confirmedAt: text("confirmed_at"),
+  reviewedByUserId: text("reviewed_by_user_id").references(() => users.id),
+  reviewedAt: text("reviewed_at"),
+  rejectionReason: text("rejection_reason"),
+  provisionedClientId: text("provisioned_client_id").references(() => clients.id),
+  createdAt: text("created_at")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
+
+export type DemoRequest = typeof demoRequests.$inferSelect;
+export type NewDemoRequest = typeof demoRequests.$inferInsert;
+
+// ============================================================
 // Type exports
 // ============================================================
 
