@@ -27,6 +27,12 @@ export default async function AdminLayout({
           <Link href="/admin/users" className="block rounded px-2 py-1 hover:bg-ec-light-grey">
             Benutzer
           </Link>
+          <Link href="/admin/webinars" className="block rounded px-2 py-1 hover:bg-ec-light-grey">
+            Webinare
+          </Link>
+          <Link href="/admin/demo-requests" className="block rounded px-2 py-1 hover:bg-ec-light-grey">
+            Demo-Anfragen
+          </Link>
           <Link href="/backlog" className="block rounded px-2 py-1 hover:bg-ec-light-grey">
             Backlog
           </Link>
